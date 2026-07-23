@@ -50,6 +50,10 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm5.657-8.157a.75.75 0 0 1 0 1.061l-1.061 1.06a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.06-1.06a.75.75 0 0 1 1.06 0Zm-9.193 9.193a.75.75 0 0 1 0 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061a.75.75 0 0 1 1.061 0ZM8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0ZM3 8a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 3 8Zm13 0a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8Zm-8 5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 13Zm3.536-1.464a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 0 1-1.06 1.061l-1.061-1.06a.75.75 0 0 1 0-1.061ZM2.343 2.343a.75.75 0 0 1 1.061 0l1.06 1.061a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-1.06-1.06a.75.75 0 0 1 0-1.06Z"></path></svg>',
   moon:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z"></path></svg>',
+  copy:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg>',
+  check:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg>',
   external:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"></path></svg>',
   menu:
@@ -262,6 +266,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
                 <div class="gdt-search-results" data-gdt-results hidden></div>
               </div>
               <div class="gdt-actions">
+                <button class="gdt-iconbtn" data-gdt-copy-md type="button" title="Copy document markdown" disabled>${ICONS.copy}</button>
                 <button class="gdt-iconbtn" data-gdt-live-edit type="button" title="Edit this document in the viewer" disabled>${ICONS.edit}</button>
                 <button class="gdt-iconbtn" data-gdt-theme-toggle type="button" title="Theme: auto">${ICONS.theme}</button>
                 <a class="gdt-iconbtn" data-gdt-open-gh target="_blank" rel="noopener noreferrer" title="View on GitHub">${ICONS.github}</a>
@@ -288,6 +293,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       progress: root.querySelector('[data-gdt-progress]'),
       titleToggle: root.querySelector('[data-gdt-title-toggle]'),
       liveEdit: root.querySelector('[data-gdt-live-edit]'),
+      copyMd: root.querySelector('[data-gdt-copy-md]'),
       crumbs: root.querySelector('[data-gdt-crumbs]'),
       searchInput: root.querySelector('[data-gdt-search]'),
       results: root.querySelector('[data-gdt-results]'),
@@ -333,6 +339,44 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     refs.themeToggle.addEventListener('click', cycleTheme);
     refs.liveEdit.addEventListener('click', () => {
       if (currentPath) openEditor(currentPath);
+    });
+    refs.copyMd.addEventListener('click', async () => {
+      if (!currentPath) return;
+      let source = contentCache.get(currentPath);
+      if (source == null) {
+        try {
+          source = await client.getRawText(currentPath);
+          contentCache.set(currentPath, source);
+        } catch {
+          return;
+        }
+      }
+      const fallbackCopy = () => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = source;
+          ta.style.cssText = 'position:fixed;opacity:0';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          return ok;
+        } catch {
+          return false;
+        }
+      };
+      const done = (ok) => {
+        refs.copyMd.innerHTML = ok ? ICONS.check : ICONS.copy;
+        refs.copyMd.title = ok ? 'Copied!' : 'Clipboard unavailable';
+        setTimeout(() => {
+          refs.copyMd.innerHTML = ICONS.copy;
+          refs.copyMd.title = 'Copy document markdown';
+        }, 1400);
+      };
+      navigator.clipboard.writeText(source).then(
+        () => done(true),
+        () => done(fallbackCopy())
+      );
     });
 
     let filterTimer = 0;
@@ -743,6 +787,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     refs.editGh.href = client.editUrl(path);
     refs.openGh.href = client.blobUrl(path);
     refs.liveEdit.disabled = false;
+    refs.copyMd.disabled = false;
 
     refs.article.textContent = '';
     const header = buildArticleHeader(path, m, doc, rd);
