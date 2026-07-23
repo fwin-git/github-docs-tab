@@ -129,6 +129,21 @@ The harness serves a fake GitHub repo page with stubbed `chrome.storage` and Git
 
 The `docs/` folder is user documentation and doubles as the extension's live showcase (frontmatter, wiki links, pinned docs). Pure logic (path resolution, frontmatter, slugs, docs collection, wiki-link resolution, search, markdown plugins, cache policy) is in ESM modules under `src/common/` + `src/content/` and covered by tests; browser integration (tab injection, viewer, routing) is verified through the harness.
 
+## Releases & CI
+
+Every push and pull request runs the **CI** workflow (`.github/workflows/ci.yml`): unit tests, a full build, bundle syntax checks, and manifest validation.
+
+Releases are automated (`.github/workflows/release.yml`) and produce a GitHub Release with the built **Chrome** and **Firefox** zips attached plus auto-generated change notes (the commits since the previous tag). Two ways to cut one:
+
+- **Tag push** — bump `version` in `manifest.json` and `package.json`, commit, then:
+  ```bash
+  git tag v0.1.1 && git push origin v0.1.1
+  ```
+  The workflow verifies the tag matches the manifest version, builds, and publishes.
+- **Manual dispatch** — in the repo's **Actions → Release → Run workflow**, enter a version (e.g. `0.1.1`). It bumps the version files, commits, tags, builds, and publishes in one go.
+
+Grab the attached zip from any release and load it unpacked (Chrome) or as a temporary add-on (Firefox) — see the [Installation Guide](docs/installation.md).
+
 ## Limitations
 
 - GitHub Enterprise domains are not yet supported (github.com only).
