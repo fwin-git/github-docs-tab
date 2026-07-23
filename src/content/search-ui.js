@@ -64,7 +64,10 @@ export function createSearchUI({ input, panel, getDocs, getMeta, getIndex, getIn
     if (input.value.trim()) run();
   });
   document.addEventListener('click', (e) => {
-    if (!panel.hidden && !panel.contains(e.target) && e.target !== input) close();
+    if (panel.hidden || panel.contains(e.target) || e.target === input) return;
+    // Chips and broken wiki links open the panel from within the same click.
+    if (e.target.closest && e.target.closest('.gdt-tag-chip, .gdt-wikilink-broken')) return;
+    close();
   });
 
   function el(tag, className, text) {
