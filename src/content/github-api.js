@@ -69,6 +69,27 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
   const isRateLimited = (res) =>
     (res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0';
 
+  // Turns common auth failures into actionable messages (SAML SSO gating is
+  // the usual reason a valid-looking token cannot see an org's private repo).
+  const explainAuthFailure = (res) => {
+    const sso = res.headers.get('x-github-sso');
+    if (sso && sso.startsWith('required')) {
+      return new Error(
+        'Your organization requires SAML SSO authorization for this token — open github.com/settings/tokens and use "Configure SSO" on it.'
+      );
+    }
+    if (res.status === 401) {
+      return new Error('GitHub rejected the token (401) — it may be expired, revoked, or mistyped.');
+    }
+    if (res.status === 404 && token) {
+      return new NotFoundError(
+        `Repo not found or the token cannot access it (404). For private org repos the token must be granted to ${owner} — ` +
+          'fine-grained tokens need the org set as resource owner (and the org must allow them); classic tokens need the "repo" scope.'
+      );
+    }
+    return null;
+  };
+
   const storageGet = async (key) => {
     try {
       return (await ext.storage.local.get(key))[key];
@@ -153,10 +174,10 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
       if (cached && Array.isArray(cached.entries)) return cachedResult(cached, true);
       throw new RateLimitError(rate.resetAt);
     }
-    if (res.status === 404 || res.status === 409) {
-      throw new NotFoundError(`No readable tree for ${owner}/${repo}`);
-    }
     if (!res.ok) {
+      const explained = explainAuthFailure(res);
+      if (explained) throw explained;
+      if (res.status === 404 || res.status === 409) throw new NotFoundError(`No readable tree for ${owner}/${repo}`);
       if (cached && Array.isArray(cached.entries)) return cachedResult(cached, true);
       throw new Error(`GitHub API error ${res.status}`);
     }

@@ -64,7 +64,13 @@ async function init() {
       if (res.ok) {
         const user = await res.json();
         const limit = res.headers.get('x-ratelimit-limit');
-        showStatus(status, `Token OK — authenticated as ${user.login} (${limit || '5000'} requests/hour).`, true);
+        showStatus(
+          status,
+          `Token OK — authenticated as ${user.login} (${limit || '5000'} requests/hour). ` +
+            'Note: this does not verify repo access — for private org repos, fine-grained tokens must be granted to that org, ' +
+            'and orgs with SAML SSO require "Configure SSO" on classic tokens.',
+          true
+        );
       } else {
         showStatus(status, `Token rejected by GitHub (HTTP ${res.status}).`, false);
       }
