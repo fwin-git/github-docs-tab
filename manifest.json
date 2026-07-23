@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GitHub Docs Tab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Adds a Docs tab to GitHub repositories: browse, search, and read a repo's markdown documentation without digging through the file tree.",
   "homepage_url": "https://github.com/fwin-git/github-docs-tab",
   "icons": {
