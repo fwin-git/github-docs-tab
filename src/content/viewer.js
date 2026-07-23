@@ -430,7 +430,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       let source = contentCache.get(currentPath);
       if (source == null) {
         try {
-          source = await client.getRawText(currentPath);
+          source = await client.getRawText(currentPath, { sha: (docByPath.get(currentPath) || {}).sha });
           contentCache.set(currentPath, source);
         } catch {
           return;
@@ -917,7 +917,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
           if (doc.size && doc.size > limitBytes) continue;
           let source = contentCache.get(doc.path);
           if (source == null) {
-            source = await client.getRawText(doc.path);
+            source = await client.getRawText(doc.path, { sha: doc.sha });
             contentCache.set(doc.path, source);
           }
           addToIndex(doc, source);
@@ -994,7 +994,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     let source = contentCache.get(path);
     if (source == null) {
       try {
-        source = await client.getRawText(path);
+        source = await client.getRawText(path, { sha: (docByPath.get(path) || {}).sha });
         contentCache.set(path, source);
       } catch (err) {
         if (seq !== loadSeq) return;
@@ -1068,7 +1068,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   async function ensureBaseSource(path) {
     let base = contentCache.get(path);
     if (base == null) {
-      base = await client.getRawText(path);
+      base = await client.getRawText(path, { sha: (docByPath.get(path) || {}).sha });
       contentCache.set(path, base);
     }
     return base;
@@ -1630,7 +1630,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     let source = contentCache.get(path);
     if (source == null) {
       try {
-        source = await client.getRawText(path);
+        source = await client.getRawText(path, { sha: (docByPath.get(path) || {}).sha });
         contentCache.set(path, source);
       } catch (err) {
         renderError(path, err);

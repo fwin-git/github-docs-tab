@@ -44,6 +44,7 @@ That's it — open any repository and click the **Docs** tab.
 - **Light/dark mode**: follows GitHub's active theme automatically (including dim variants) via GitHub's CSS variables, with a manual auto → light → dark override.
 - **Shareable URLs**: viewer state lives in the fragment — `https://github.com/owner/repo#docs/docs/guide.md?h=install` reloads and shares cleanly (people without the extension simply see the repo).
 - **Private repos & rate limits**: works anonymously on public repos (60 API requests/hour, softened by ETag caching — 304 revalidations are free). Add a personal access token in Options for 5,000/hour and private repositories.
+- **Persistent content cache**: file contents are cached in `storage.local` keyed by their git **blob SHA** — a content hash, so a cache hit is always exact and never stale. Re-opening a document or re-indexing an organization re-downloads only the files whose content actually changed; unchanged files cost zero requests, even across browser restarts. The cache is byte-bounded (LRU-evicted) and clearable from the popup.
 
 ## Installation
 
@@ -111,7 +112,7 @@ Click the extension icon → **Options**:
 
 ## Privacy
 
-No telemetry, no external services. The extension talks exclusively to `api.github.com` and `raw.githubusercontent.com`, requests only the `storage` permission, runs only on `https://github.com/*`, and stores settings/caches in your browser's extension storage. All rendered markdown is sanitized with DOMPurify before insertion.
+No telemetry, no external services. The extension talks exclusively to `api.github.com` and `raw.githubusercontent.com`, requests only the `storage` and `unlimitedStorage` permissions, runs only on `https://github.com/*`, and stores settings/caches in your browser's extension storage. All rendered markdown is sanitized with DOMPurify before insertion.
 
 ## Development
 

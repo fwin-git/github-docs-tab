@@ -4,6 +4,7 @@
 import { ext } from '../common/browser.js';
 import { encodePath, basename } from '../common/paths.js';
 import { toBase64Utf8 } from '../common/edit-utils.js';
+import { readBlob, writeBlob } from './blob-cache.js';
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -243,7 +244,13 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     return { ...result, stale: false, fromCache: false };
   }
 
-  async function getRawText(path) {
+  async function getRawText(path, { sha } = {}) {
+    // Content-addressed cache: a matching blob SHA means identical content,
+    // so we can skip the network entirely (persists across sessions).
+    if (sha) {
+      const cached = await readBlob(sha);
+      if (cached != null) return cached;
+    }
     let res;
     if (token) {
       // Authorization on raw.githubusercontent is unreliable for fine-grained
@@ -260,7 +267,9 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
       if (res.status === 404) throw new NotFoundError(`Not found: ${path}`);
       throw new Error(`Fetch failed (${res.status}) for ${path}`);
     }
-    return res.text();
+    const text = await res.text();
+    if (sha) writeBlob(sha, text); // fire-and-forget persistent cache
+    return text;
   }
 
   async function getBlobObjectURL(path) {

@@ -1,6 +1,7 @@
 import { ext } from '../common/browser.js';
 import { loadSettings } from '../common/settings.js';
 import { clearTreeCaches } from '../content/github-api.js';
+import { clearBlobCache, blobCacheStats } from '../content/blob-cache.js';
 
 function ago(ts) {
   if (!ts) return '';
@@ -10,6 +11,16 @@ function ago(ts) {
   const h = Math.round(min / 60);
   if (h < 24) return `${h} h ago`;
   return `${Math.round(h / 24)} d ago`;
+}
+
+async function showBlobStats() {
+  try {
+    const { count, bytes } = await blobCacheStats();
+    const el = document.getElementById('blob-stats');
+    if (el) el.textContent = count ? `${count} files cached (${(bytes / 1048576).toFixed(1)} MB) — saves re-downloads` : 'No file content cached yet.';
+  } catch {
+    // ignore
+  }
 }
 
 async function renderCache() {
@@ -78,11 +89,15 @@ async function init() {
 
   document.getElementById('clear-cache').addEventListener('click', async () => {
     const n = await clearTreeCaches();
+    const b = await clearBlobCache();
     const status = document.getElementById('status');
-    status.textContent = `Cleared ${n} cached repo listing${n === 1 ? '' : 's'}.`;
+    status.textContent = `Cleared ${n} listing${n === 1 ? '' : 's'} and ${b} cached file${b === 1 ? '' : 's'}.`;
     status.hidden = false;
     renderCache();
+    showBlobStats();
   });
+
+  showBlobStats();
 
   renderCache();
 }

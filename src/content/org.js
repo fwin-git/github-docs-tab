@@ -78,7 +78,7 @@ export async function indexOrgContent({ owner, repoDocs, settings, onProgress = 
       while (queue.length) {
         const doc = queue.shift();
         try {
-          const source = await client.getRawText(doc.path);
+          const source = await client.getRawText(doc.path, { sha: doc.sha });
           const { data, content } = parseFrontmatter(source);
           index.add(`${repo}${ORG_SEP}${doc.path}`, {
             text: mdToPlainText(content),
@@ -134,7 +134,7 @@ export async function buildOrgIndex({ owner, repoNames, settings, onProgress = (
         while (queue.length) {
           const doc = queue.shift();
           try {
-            const source = await client.getRawText(doc.path);
+            const source = await client.getRawText(doc.path, { sha: doc.sha });
             const { data, content } = parseFrontmatter(source);
             doc.title = docTitle(data, '') || bestHeadingTitle(content) || doc.title;
             index.add(`${repo}${ORG_SEP}${doc.path}`, {
