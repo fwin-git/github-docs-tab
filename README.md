@@ -34,7 +34,9 @@ That's it — open any repository and click the **Docs** tab.
 - **Linking between files**: relative links (`./other.md`, `../a/b.md#section`) navigate inside the viewer; links to markdown outside the collection load on demand; links to other repo files go to GitHub; external links open in a new tab. Images resolve to raw content automatically.
 - **Wiki links**: `[[Page]]`, `[[Page|Label]]`, `[[Page#Heading]]`, `[[Page#Heading|Label]]`, `[[#Same-file heading]]`. Resolution by path → basename (case/space/dash/underscore-insensitive) → frontmatter title, preferring same-folder matches. Broken wiki links are styled distinctly and open search.
 - **Live search** (`/` to focus): instant filename fuzzy matching plus full-text search once the background index finishes (progress shown). Supports `"exact phrases"` and `tag:x` filters; results show highlighted snippets and jump to matched headings.
-- **Organization-wide docs** (building icon in the sidebar): pick any subset of the org's repositories (All/None, selection remembered), index them in one go, and get a sidebar grouped by repository plus an **Organization** group in search results — hits open the matching repo's own Docs tab directly. Repo listings reuse the per-repo ETag cache; a token is effectively required (anonymous rate limits won't index an org).
+- **Organization-wide docs** (building icon in the sidebar): index the docs of many repositories at once and search across all of them — see [Organization-wide search](#organization-wide-search) below.
+- **In-viewer editing with drafts** (pencil icon): edit any document in a live source+preview editor, stage several files as **drafts**, then publish the whole session as one pull request — see [Editing documents](#editing-documents) below.
+- **Copy document markdown** (copy icon in the toolbar): copies the current document's raw markdown source to the clipboard in one click.
 - **YAML frontmatter support**: `title` (used in sidebar/breadcrumbs), `description`, `tags`/`keywords`/`categories` (clickable chips + `tag:` search), `order`/`sidebar_position` (sidebar ordering), `pinned: true`/`pin: true` (pinned section at the top of the sidebar), plus a collapsible metadata panel for everything else. Frontmatter is never rendered as raw text.
 - **Sidebar**: file tree with folder icons and collapsible directories, a live filter field, pinned docs section, tag chips, and document count. README/index files sort first, then frontmatter order, then natural sort.
 - **Title mode toggle** (H/file icon next to refresh): show each document as its **title** — YAML frontmatter `title:` first; otherwise the first highest headline (an h1 anywhere in the file wins; if there is no h1, the first h2, and so on); otherwise the filename — or as its plain **filename**. The choice persists.
@@ -60,7 +62,9 @@ Want to see it before installing anything? `npm run install-ext -- --trial` laun
 - Press `/` to search. Use `tag:guide`, `"exact phrase"`, or plain terms. `Esc` closes.
 - Use the sidebar filter field to narrow the file tree as you type.
 - Pin important docs to the top of the sidebar with `pinned: true` in their frontmatter.
-- The circle icon toggles auto/light/dark theme; the arrows icon refreshes the doc list; GitHub/pencil icons open or edit the current file on GitHub.
+- **Sidebar header** (left → right): the **building** icon opens organization-wide search, the **H/file** icon toggles title vs. filename mode, and the **refresh** icon re-fetches the doc list.
+- **Top bar actions** (right): **copy** grabs the document's raw markdown, the **pencil** opens the in-viewer editor, the **theme** icon cycles auto → light → dark (its glyph shows the current mode: half-circle / sun / moon), and the **↗** icons open or edit the file on GitHub.
+- **Extension popup** (toolbar icon): token status, a list of cached repositories (each links to its Docs tab, with age and per-repo eviction), and cache-clearing.
 
 ## Frontmatter
 
@@ -77,6 +81,17 @@ Saving is always an explicit, confirmed step, with three routes:
 3. **Download .patch / Copy patch** — no auth at all. A standard unified diff (`git apply file.patch` or `patch -p1 < file.patch`), generated locally.
 
 **Drafting & batch publishing:** instead of publishing each file immediately, **Save draft** stages the edit locally (per repository, surviving reloads). Drafted files get a dot in the sidebar tree and collect in a **Drafts** section, where you can keep editing, discard individually, or — once you're done with the whole session — hit **Publish session…**: one branch, one commit per file, one pull request (auto-fork as usual), or download the entire session as a single multi-file `.patch`.
+
+## Organization-wide search
+
+Documentation for an organization is usually spread across many repositories. The **building icon** in the sidebar header lets you browse and search all of it from one place.
+
+1. **Pick repositories.** A dialog lists every repository in the organization (or user account). It has a **filter field** (matches name and description), **All / None** buttons that act on the currently filtered rows, and remembers your last selection. Archived repos are listed but unchecked by default.
+2. **Watch it index.** Each selected repository gets its own row with a **progress bar** (listing → files indexed → done, green on success or red with the error on failure), above an **overall progress bar**. Listings reuse the per-repo ETag cache, so re-indexing later is mostly free 304s.
+3. **Browse and search across everything.** The sidebar switches to a view **grouped by repository** (collapsible, current repo first, with per-repo doc counts), and live search grows an **Organization** results group. Selecting any cross-repo hit opens that document in its own repository's Docs tab — instant, because the listing is already cached. The **×** in the org bar returns to single-repo view (and leaves org mode, so it won't auto-restore).
+4. **It sticks.** Once you've indexed an organization, opening the Docs tab on *any* of its repositories restores the grouped org view automatically — the repository listings are remembered, so the sidebar is there immediately and search re-indexes in the background.
+
+> A GitHub token is effectively required here — indexing dozens of repositories will blow through the 60 requests/hour anonymous limit. Add one in **Options** (a classic token with the `repo` scope is simplest). The remembered snapshot keeps the sidebar instant across reloads; the full-text index rebuilds in the background (fast, thanks to the per-repo caches).
 
 ## Options
 

@@ -24,7 +24,7 @@ import { createMarkdownIt } from './markdown.js';
 import { renderDoc } from './render-doc.js';
 import { createSearchUI } from './search-ui.js';
 import { loadDrafts, saveDraft, removeDraft, clearDrafts } from './drafts.js';
-import { loadOrgSelection, saveOrgSelection, buildOrgIndex, ORG_SEP } from './org.js';
+import { loadOrgSelection, saveOrgSelection, buildOrgIndex, saveOrgSnapshot, loadOrgSnapshot, clearOrgSnapshot, indexOrgContent, ORG_SEP } from './org.js';
 import { RateLimitError } from './github-api.js';
 
 const ICONS = {
@@ -391,6 +391,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     root.querySelector('[data-gdt-orgbar-close]').addEventListener('click', () => {
       orgSession = null;
       refs.orgBar.hidden = true;
+      clearOrgSnapshot(client.owner);
       renderTree();
     });
     root.querySelector('[data-gdt-publish-session]').addEventListener('click', openSessionModal);
@@ -660,7 +661,8 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     const treeEl = refs.tree;
     treeEl.textContent = '';
     refs.orgBar.hidden = false;
-    refs.orgBarLabel.textContent = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
+    const base = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
+    refs.orgBarLabel.textContent = orgSession.indexing ? `${base} · indexing search ${orgSession.indexPct || 0}%` : base;
     const repos = [...orgSession.repoDocs.keys()].sort((a, b) =>
       a === client.repo ? -1 : b === client.repo ? 1 : a.localeCompare(b)
     );
@@ -1151,9 +1153,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
       try {
         const result = await buildOrgIndex({ owner: client.owner, repoNames: chosen, settings, onProgress });
+        if (!result.repoDocs.has(client.repo)) result.repoDocs.set(client.repo, docs);
         let totalDocs = 0;
         for (const docsOfRepo of result.repoDocs.values()) totalDocs += docsOfRepo.length;
-        orgSession = { org: client.owner, ...result, totalDocs };
+        orgSession = { org: client.owner, ...result, totalDocs, indexing: false };
+        saveOrgSnapshot(client.owner, result.repoDocs);
         renderTree();
         if (result.errors.length) {
           overallLabel.textContent = `Done — ${result.errors.length} repositor${result.errors.length === 1 ? 'y' : 'ies'} skipped (see rows)`;
@@ -1825,6 +1829,52 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     root.appendChild(backdrop);
   }
 
+  // Auto-restore org mode from the persisted snapshot: grouped sidebar comes
+  // back instantly; the search index rebuilds in the background.
+  let orgRestoreTried = false;
+  async function maybeRestoreOrg() {
+    if (orgRestoreTried || orgSession) return;
+    orgRestoreTried = true;
+    const snap = await loadOrgSnapshot(client.owner);
+    if (!snap || !snap.size || !mounted || orgSession) return;
+    if (!snap.has(client.repo)) snap.set(client.repo, docs);
+    let totalDocs = 0;
+    for (const d of snap.values()) totalDocs += d.length;
+    orgSession = {
+      org: client.owner,
+      index: new ContentIndex(),
+      repoDocs: snap,
+      errors: [],
+      totalDocs,
+      indexing: true,
+      indexPct: 0,
+    };
+    renderTree();
+    try {
+      let filesSeen = 0;
+      const idx = await indexOrgContent({
+        owner: client.owner,
+        repoDocs: snap,
+        settings,
+        onProgress: (ev) => {
+          if (!orgSession) return;
+          // rough overall percent across repos
+          orgSession.indexPct = Math.round((ev.index - 1 + (ev.filesTotal ? ev.filesDone / ev.filesTotal : 1)) / ev.total * 100);
+          if (orgSession.indexing && refs.orgBar && !refs.orgBar.hidden) {
+            const base = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
+            refs.orgBarLabel.textContent = `${base} · indexing search ${orgSession.indexPct}%`;
+          }
+        },
+      });
+      if (!orgSession) return; // user left org mode meanwhile
+      orgSession.index = idx;
+      orgSession.indexing = false;
+      renderTree();
+    } catch {
+      if (orgSession) orgSession.indexing = false;
+    }
+  }
+
   // ---- public ---------------------------------------------------------------
 
   return {
@@ -1839,6 +1889,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
         if (!mount()) return;
         applyTheme();
         startIndexing();
+        maybeRestoreOrg();
       }
       await renderRoute(route);
     },
