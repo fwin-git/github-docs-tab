@@ -1,5 +1,7 @@
 # GitHub Docs Tab Implementation Plan
 
+> **Status: COMPLETE (2026-07-23).** All tasks executed inline. 95 unit tests green; build + zips verified; full user journey verified in the browser harness (tab injection, viewer, wiki/relative links, phrase search with heading jump, tags, pinned section, tree filter, themes, close/restore). Post-plan additions from user feedback: sidebar folder icons + larger type, live tree filter, frontmatter-pinned section.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (inline execution chosen — same-session author/executor). Steps use checkbox (`- [ ]`) syntax for tracking.
 > Note: this plan is executed by its author in the same session with the full spec in context, so tasks specify exact interfaces, behaviors, and test cases rather than duplicating complete implementation bodies.
 
