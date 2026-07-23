@@ -336,9 +336,29 @@
 }
 
 #gdt-root .gdt-doc-count {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--gdt-fg-muted);
+}
+
+#gdt-root .gdt-count-ico {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.8;
+}
+
+#gdt-root .gdt-count-sep {
+  margin: 0 3px;
+  opacity: 0.5;
+}
+
+#gdt-root .gdt-count-indexing {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--gdt-accent);
 }
 
 #gdt-root .gdt-truncated {

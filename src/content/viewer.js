@@ -57,6 +57,8 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z"></path></svg>',
   link:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 2 2 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a2 2 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 2 2 0 0 0-2.83 0l-2.5 2.5a2.002 2.002 0 0 0 0 2.83Z"></path></svg>',
+  branch:
+    '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"></path></svg>',
   copy:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg>',
   check:
@@ -598,24 +600,27 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   // ---- sidebar --------------------------------------------------------------
 
   function updateSidebarMeta() {
-    // In org mode: org name as a title line, and the count row shows the
-    // org-wide document total plus how many repos are indexed of the total.
+    // Icons stand in for the words "documents" (file) and "repos" (branch) so
+    // the counts fit one row. Numbers are ours (no user data) so innerHTML is
+    // safe here; the org name uses textContent separately.
+    const docIcon = `<span class="gdt-count-ico">${ICONS.file}</span>`;
+    const branchIcon = `<span class="gdt-count-ico">${ICONS.branch}</span>`;
     if (orgSession) {
       const n = orgSession.totalDocs;
       const repos = orgSession.repoDocs.size;
       const indexed = [...orgSession.repoState.values()].filter((s) => s.phase === 'done').length;
       refs.orgTitle.hidden = false;
       refs.orgTitleName.textContent = orgSession.org;
-      refs.countLabel.textContent =
-        `${n.toLocaleString()} document${n === 1 ? '' : 's'} · ${indexed}/${repos} repo${repos === 1 ? '' : 's'} indexed` +
-        (orgSession.indexing ? ' · indexing…' : '');
-      refs.countLabel.title = `${indexed} of ${repos} repositories indexed for search`;
+      refs.countLabel.innerHTML =
+        `${docIcon}${n.toLocaleString()}<span class="gdt-count-sep">·</span>${branchIcon}${indexed}/${repos}` +
+        (orgSession.indexing ? '<span class="gdt-count-indexing">indexing…</span>' : '');
+      refs.countLabel.title = `${n.toLocaleString()} documents · ${indexed} of ${repos} repositories indexed for search`;
       refs.truncatedBox.hidden = true;
       return;
     }
     refs.orgTitle.hidden = true;
-    refs.countLabel.title = '';
-    refs.countLabel.textContent = `${total} document${total === 1 ? '' : 's'}`;
+    refs.countLabel.innerHTML = `${docIcon}${total}`;
+    refs.countLabel.title = `${total} document${total === 1 ? '' : 's'}`;
     if (truncated) {
       refs.truncatedBox.hidden = false;
       refs.truncatedBox.textContent = `Showing the first ${docs.length} of ${total} docs (raise the limit in Options).`;
