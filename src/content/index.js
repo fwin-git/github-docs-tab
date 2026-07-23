@@ -200,7 +200,16 @@ const observer = new MutationObserver(() => {
 });
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-onSettingsChanged(() => {
+// In-viewer preferences (theme, title mode) are handled by the viewer itself —
+// only changes that affect what we collect or show require a full rebuild.
+const REBUILD_KEYS = ['token', 'docsFolders', 'includeRootFiles', 'maxFiles', 'showBadge', 'contentSearchLimitKB'];
+
+onSettingsChanged((next) => {
+  if (current && current.settings) {
+    const needsRebuild = REBUILD_KEYS.some((k) => JSON.stringify(next[k]) !== JSON.stringify(current.settings[k]));
+    current.settings = { ...current.settings, theme: next.theme, titleMode: next.titleMode };
+    if (!needsRebuild) return;
+  }
   const old = current;
   current = null;
   old?.viewer?.close();

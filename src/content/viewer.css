@@ -1238,3 +1238,8 @@
     display: none !important;
   }
 }
+
+#gdt-root .gdt-side-actions {
+  display: inline-flex;
+  gap: 2px;
+}

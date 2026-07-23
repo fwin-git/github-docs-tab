@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mdToPlainText, extractHeadings } from '../src/common/md-text.js';
+import { mdToPlainText, extractHeadings, bestHeadingTitle } from '../src/common/md-text.js';
 
 test('mdToPlainText strips markdown syntax but keeps readable text', () => {
   const src = [
@@ -32,6 +32,28 @@ test('mdToPlainText strips markdown syntax but keeps readable text', () => {
   assert.ok(!out.includes('](')); // link syntax gone
   assert.ok(!out.includes('```'));
   assert.ok(!out.includes('[['));
+});
+
+test('bestHeadingTitle picks the first heading of the highest level present', () => {
+  assert.equal(bestHeadingTitle('## Sub\n\ntext\n\n# Main\n\n## Other'), 'Main');
+  assert.equal(bestHeadingTitle('### Deep\n\n## Two\n\n### More\n\n## Later'), 'Two');
+  assert.equal(bestHeadingTitle('#### Only'), 'Only');
+  assert.equal(bestHeadingTitle('no headings here'), null);
+  assert.equal(bestHeadingTitle(''), null);
+});
+
+test('bestHeadingTitle ignores headings inside code fences', () => {
+  assert.equal(bestHeadingTitle('```\n# fenced\n```\n\n## Real'), 'Real');
+});
+
+test('bestHeadingTitle supports setext headings', () => {
+  assert.equal(bestHeadingTitle('My Title\n========\n\n## Sub'), 'My Title');
+  assert.equal(bestHeadingTitle('Sub Title\n---------\n\n### Deep'), 'Sub Title');
+});
+
+test('bestHeadingTitle strips inline markdown', () => {
+  assert.equal(bestHeadingTitle('# **Bold** `code` [link](https://x.y)'), 'Bold code link');
+  assert.equal(bestHeadingTitle('# Title with *em*'), 'Title with em');
 });
 
 test('extractHeadings returns heading texts in order', () => {

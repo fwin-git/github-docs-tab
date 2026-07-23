@@ -12,6 +12,7 @@ A browser extension for **Chrome and Firefox** that adds a **Docs** tab to every
 - **Live search** (`/` to focus): instant filename fuzzy matching plus full-text search once the background index finishes (progress shown). Supports `"exact phrases"` and `tag:x` filters; results show highlighted snippets and jump to matched headings.
 - **YAML frontmatter support**: `title` (used in sidebar/breadcrumbs), `description`, `tags`/`keywords`/`categories` (clickable chips + `tag:` search), `order`/`sidebar_position` (sidebar ordering), `pinned: true`/`pin: true` (pinned section at the top of the sidebar), plus a collapsible metadata panel for everything else. Frontmatter is never rendered as raw text.
 - **Sidebar**: file tree with folder icons and collapsible directories, a live filter field, pinned docs section, tag chips, and document count. README/index files sort first, then frontmatter order, then natural sort.
+- **Title mode toggle** (H/file icon next to refresh): show each document as its **first highest headline** — an h1 anywhere in the file wins; if there is no h1, the first h2, and so on (falling back to frontmatter title, then filename) — or as its plain **filename**. The choice persists.
 - **Reading aids**: "On this page" table of contents with scroll-spy, breadcrumbs, previous/next navigation, reading-position deep links.
 - **Light/dark mode**: follows GitHub's active theme automatically (including dim variants) via GitHub's CSS variables, with a manual auto → light → dark override.
 - **Shareable URLs**: viewer state lives in the fragment — `https://github.com/owner/repo#docs/docs/guide.md?h=install` reloads and shares cleanly (people without the extension simply see the repo).
@@ -31,6 +32,23 @@ The installer builds the extension if needed, detects your browsers (Chrome, Bra
 - **Quick trial** — zero clicks: launches a throwaway browser session with the extension already loaded (`--load-extension` for Chromium-family, Mozilla's `web-ext run` for Firefox). Note: branded Google Chrome ≥137 ignores `--load-extension`; trials work best in Brave/Edge/Chromium, and the guided install works everywhere.
 
 Non-interactive: `npm run install-ext -- --browser firefox --trial`, `--list`, `--dry-run`.
+
+### Running a trial
+
+A trial is the fastest way to see the extension working — nothing is installed into your daily browser profile:
+
+```bash
+npm run install-ext -- --trial                    # prompts for the browser
+npm run install-ext -- --browser brave --trial    # Chromium-family: instant
+npm run install-ext -- --browser firefox --trial  # via `npx web-ext run`
+```
+
+What happens:
+
+1. **Chromium-family (Brave/Edge/Chromium/Chrome):** a separate browser window opens using a throwaway profile in your temp directory, launched with `--load-extension=dist`. Visit any GitHub repository — the Docs tab is already there. Close the window and the profile is inert; your normal profile is untouched.
+2. **Firefox:** the CLI runs Mozilla's `web-ext run` (fetched on first use via `npx`), which starts a fresh Firefox profile with the extension pre-loaded and live-reloads it when `dist/` changes. Keep the terminal open; `Ctrl+C` ends the session.
+
+Caveats: branded Google Chrome ≥137 ignores `--load-extension` — if the Docs tab doesn't appear there, use Brave/Edge/Chromium for the trial or the guided install (which works in every Chrome). Firefox trials are session-scoped by design; the guided install's temporary add-on lasts until Firefox restarts, and a permanent Firefox install requires a signed zip from [addons.mozilla.org](https://addons.mozilla.org/developers/).
 
 ### Manual: Chrome (and Chromium/Edge/Brave)
 

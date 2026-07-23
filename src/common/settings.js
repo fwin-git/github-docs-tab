@@ -9,6 +9,7 @@ export const DEFAULTS = {
   includeRootFiles: true,
   maxFiles: 500,
   theme: 'auto', // 'auto' | 'light' | 'dark'
+  titleMode: 'heading', // 'heading' (first highest headline) | 'filename'
   showBadge: true,
   contentSearchLimitKB: 200,
 };

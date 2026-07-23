@@ -34,6 +34,56 @@ export function mdToPlainText(src) {
   );
 }
 
+function cleanInline(text) {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(?=\S)(.*?)(?<=\S)\1/g, '$2')
+    .trim();
+}
+
+// Title for a document: the first heading of the highest level present —
+// an h1 anywhere beats the first h2, which beats the first h3, and so on.
+export function bestHeadingTitle(src) {
+  const lines = src.split('\n');
+  let best = null; // {level, text}
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^ {0,3}(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    let level = null;
+    let text = null;
+    const atx = /^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+    if (atx) {
+      level = atx[1].length;
+      text = atx[2];
+    } else if (i + 1 < lines.length && line.trim() && !/^ {0,3}[#>\-*+|]/.test(line)) {
+      const next = lines[i + 1];
+      if (/^ {0,3}={2,}\s*$/.test(next)) {
+        level = 1;
+        text = line.trim();
+      } else if (/^ {0,3}-{2,}\s*$/.test(next)) {
+        level = 2;
+        text = line.trim();
+      }
+    }
+    if (level == null) continue;
+    const cleaned = cleanInline(text);
+    if (!cleaned) continue;
+    if (!best || level < best.level) {
+      best = { level, text: cleaned };
+      if (level === 1) break; // nothing can beat the first h1
+    }
+  }
+  return best ? best.text : null;
+}
+
 export function extractHeadings(src) {
   const out = [];
   let inFence = false;

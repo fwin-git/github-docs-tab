@@ -14,7 +14,7 @@ import { normalizeTags, docTitle, parseFrontmatter, isPinned } from '../common/f
 import { resolveRelative, splitAnchor, isMarkdownPath, dirname, basename } from '../common/paths.js';
 import { buildHash } from '../common/route.js';
 import { githubSlug } from '../common/slugger.js';
-import { mdToPlainText, extractHeadings } from '../common/md-text.js';
+import { mdToPlainText, extractHeadings, bestHeadingTitle } from '../common/md-text.js';
 import { saveSettings } from '../common/settings.js';
 import { createMarkdownIt } from './markdown.js';
 import { renderDoc } from './render-doc.js';
@@ -30,6 +30,8 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>',
   pin:
     '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.456.734a1.75 1.75 0 0 1 2.826.504l.613 1.327a3.081 3.081 0 0 0 2.084 1.707l2.454.584c1.332.317 1.8 1.972.832 2.94L11.06 10l3.72 3.72a.749.749 0 1 1-1.06 1.06L10 11.06l-2.204 2.205c-.968.968-2.623.5-2.94-.832l-.584-2.454a3.081 3.081 0 0 0-1.707-2.084l-1.327-.613a1.75 1.75 0 0 1-.504-2.826L4.456.734ZM5.92 1.866a.25.25 0 0 0-.404-.072L1.794 5.516a.25.25 0 0 0 .072.404l1.328.613A4.582 4.582 0 0 1 5.73 9.63l.584 2.454a.25.25 0 0 0 .42.12l5.47-5.47a.25.25 0 0 0-.12-.42L9.63 5.73a4.581 4.581 0 0 1-3.098-2.537L5.92 1.866Z"></path></svg>',
+  heading:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3.75 2a.75.75 0 0 1 .75.75V7h7V2.75a.75.75 0 0 1 1.5 0v10.5a.75.75 0 0 1-1.5 0V8.5h-7v4.75a.75.75 0 0 1-1.5 0V2.75A.75.75 0 0 1 3.75 2Z"></path></svg>',
   search:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>',
   refresh:
@@ -50,7 +52,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   const contentCache = new Map();
   const index = new ContentIndex();
   const tree = buildTree(docs);
-  sortTree(tree, metaByPath);
+  sortTree(tree, new Map());
   let flat = flattenTree(tree);
 
   let resolver = null;
@@ -67,13 +69,14 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   const expansion = new Set();
   const indexState = { started: false, finished: false, done: 0, total: docs.length };
   let theme = settings.theme || 'auto';
+  let titleMode = settings.titleMode === 'filename' ? 'filename' : 'heading';
   let treeFilter = '';
 
   // ---- markdown context -----------------------------------------------------
 
   function ensureResolver() {
     if (resolverDirty) {
-      resolver = buildResolver(docs, metaByPath);
+      resolver = buildResolver(docs, resolverMeta());
       resolverDirty = false;
     }
     return resolver;
@@ -153,21 +156,54 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
   // ---- metadata -------------------------------------------------------------
 
-  function recordMeta(path, data) {
-    if (!data) return false;
+  // Frontmatter and heading-derived titles are stored separately; which one a
+  // label shows depends on the sidebar title mode (toggle in the side head).
+  function recordMeta(path, data, headingTitle) {
     const doc = docByPath.get(path);
-    const rec = {
-      title: docTitle(data, doc ? doc.title : basename(path)),
-      tags: normalizeTags(data),
-      order: typeof data.order === 'number' ? data.order : undefined,
-      sidebar_position: typeof data.sidebar_position === 'number' ? data.sidebar_position : undefined,
-      pinned: isPinned(data),
-      data,
-    };
     const prev = metaByPath.get(path);
+    const rec = {
+      fmTitle: data ? docTitle(data, '') || null : (prev && prev.fmTitle) ?? null,
+      headingTitle: headingTitle !== undefined ? headingTitle : (prev && prev.headingTitle) ?? null,
+      tags: data ? normalizeTags(data) : (prev && prev.tags) ?? [],
+      order: data && typeof data.order === 'number' ? data.order : prev && prev.order,
+      sidebar_position:
+        data && typeof data.sidebar_position === 'number' ? data.sidebar_position : prev && prev.sidebar_position,
+      pinned: data ? isPinned(data) : (prev && prev.pinned) ?? false,
+      data: data ?? (prev && prev.data) ?? null,
+    };
     metaByPath.set(path, rec);
     resolverDirty = true;
-    return !prev || prev.title !== rec.title;
+    return displayTitleOf(rec, doc) !== (prev ? displayTitleOf(prev, doc) : doc && doc.title);
+  }
+
+  function displayTitleOf(rec, doc) {
+    const fallback = doc ? doc.title : null;
+    if (titleMode === 'filename') return fallback || (rec && rec.fmTitle) || '';
+    return (rec && (rec.headingTitle || rec.fmTitle)) || fallback || '';
+  }
+
+  function displayTitle(path) {
+    return displayTitleOf(metaByPath.get(path), docByPath.get(path)) || basename(path);
+  }
+
+  // Mode-aware view for sorting, tree labels, and search result titles.
+  function displayMeta() {
+    const m = new Map();
+    for (const [path, rec] of metaByPath) {
+      m.set(path, { ...rec, title: displayTitleOf(rec, docByPath.get(path)) || undefined });
+    }
+    return m;
+  }
+
+  // Mode-independent titles for wiki-link resolution: both declared and
+  // heading titles should resolve regardless of the display toggle.
+  function resolverMeta() {
+    const m = new Map();
+    for (const [path, rec] of metaByPath) {
+      const t = rec.fmTitle || rec.headingTitle;
+      if (t) m.set(path, { title: t });
+    }
+    return m;
   }
 
   // ---- DOM scaffold ---------------------------------------------------------
@@ -185,7 +221,10 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
           <aside class="gdt-sidebar" data-gdt-sidebar>
             <div class="gdt-side-head">
               <span class="gdt-doc-count" data-gdt-count-label></span>
-              <button class="gdt-iconbtn" data-gdt-refresh type="button" title="Refresh docs list">${ICONS.refresh}</button>
+              <span class="gdt-side-actions">
+                <button class="gdt-iconbtn" data-gdt-title-toggle type="button"></button>
+                <button class="gdt-iconbtn" data-gdt-refresh type="button" title="Refresh docs list">${ICONS.refresh}</button>
+              </span>
             </div>
             <div class="gdt-truncated" data-gdt-truncated hidden></div>
             <input class="gdt-filter-input" data-gdt-filter type="search" placeholder="Filter files…" autocomplete="off" spellcheck="false" aria-label="Filter file tree" />
@@ -230,6 +269,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       pinnedList: root.querySelector('[data-gdt-pinned-list]'),
       tree: root.querySelector('[data-gdt-tree]'),
       progress: root.querySelector('[data-gdt-progress]'),
+      titleToggle: root.querySelector('[data-gdt-title-toggle]'),
       crumbs: root.querySelector('[data-gdt-crumbs]'),
       searchInput: root.querySelector('[data-gdt-search]'),
       results: root.querySelector('[data-gdt-results]'),
@@ -244,7 +284,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       input: refs.searchInput,
       panel: refs.results,
       getDocs: () => docs,
-      getMeta: () => metaByPath,
+      getMeta: () => displayMeta(),
       getIndex: () => index,
       getIndexState: () => indexState,
       onNavigate: ({ path, heading }) => {
@@ -254,6 +294,20 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
     root.querySelector('[data-gdt-refresh]').addEventListener('click', () => {
       if (onRequestRefresh) onRequestRefresh();
+    });
+    updateTitleToggle();
+    refs.titleToggle.addEventListener('click', () => {
+      titleMode = titleMode === 'heading' ? 'filename' : 'heading';
+      saveSettings({ titleMode }).catch(() => {});
+      updateTitleToggle();
+      sortTree(tree, displayMeta());
+      flat = flattenTree(tree);
+      renderTree();
+      if (currentPath) {
+        renderCrumbs(currentPath);
+        renderPrevNext();
+        document.title = `${displayTitle(currentPath)} · Docs · ${client.owner}/${client.repo}`;
+      }
     });
     root.querySelector('[data-gdt-side-toggle]').addEventListener('click', () => {
       root.classList.toggle('gdt-side-open');
@@ -372,6 +426,14 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     refs.themeToggle.title = `Theme: ${theme} (click to change)`;
   }
 
+  function updateTitleToggle() {
+    refs.titleToggle.innerHTML = titleMode === 'heading' ? ICONS.heading : ICONS.file;
+    refs.titleToggle.title =
+      titleMode === 'heading'
+        ? 'Sidebar titles: first headline of each document — click for filenames'
+        : 'Sidebar titles: filenames — click for first headline of each document';
+  }
+
   function cycleTheme() {
     theme = theme === 'auto' ? 'light' : theme === 'light' ? 'dark' : 'auto';
     applyTheme();
@@ -389,8 +451,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   }
 
   function docLabel(child) {
-    const m = metaByPath.get(child.path);
-    return (m && m.title) || child.doc.title;
+    return displayTitleOf(metaByPath.get(child.path), child.doc) || child.doc.title;
   }
 
   function matchesFilter(child) {
@@ -460,7 +521,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       const m = metaByPath.get(d.path);
       if (!m || !m.pinned) return false;
       if (!treeFilter) return true;
-      const hay = `${m.title} ${d.path}`.toLowerCase();
+      const hay = `${displayTitleOf(m, d)} ${d.path}`.toLowerCase();
       return treeFilter.split(/\s+/).every((tok) => hay.includes(tok));
     });
     refs.pinnedList.textContent = '';
@@ -470,14 +531,13 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     }
     refs.pinned.hidden = false;
     for (const d of pinnedDocs) {
-      const m = metaByPath.get(d.path);
       const a = document.createElement('a');
       a.className = 'gdt-file gdt-pin-item';
       a.href = buildHash({ path: d.path });
       a.setAttribute('data-gdt-tree-path', d.path);
       a.innerHTML = `<span class="gdt-file-ico gdt-pin-ico">${ICONS.pin}</span>`;
       a.appendChild(
-        Object.assign(document.createElement('span'), { textContent: (m && m.title) || d.title, className: 'gdt-label' })
+        Object.assign(document.createElement('span'), { textContent: displayTitle(d.path), className: 'gdt-label' })
       );
       refs.pinnedList.appendChild(a);
     }
@@ -565,7 +625,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     await Promise.all(Array.from({ length: 6 }, worker));
     indexState.finished = true;
     refs.progress.hidden = true;
-    sortTree(tree, metaByPath);
+    sortTree(tree, displayMeta());
     flat = flattenTree(tree);
     if (mounted) {
       renderTree();
@@ -576,11 +636,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
   function addToIndex(doc, source) {
     const { data, content } = parseFrontmatter(source);
-    recordMeta(doc.path, data);
+    recordMeta(doc.path, data, bestHeadingTitle(content));
     const m = metaByPath.get(doc.path);
     index.add(doc.path, {
       text: mdToPlainText(content),
-      title: (m && m.title) || doc.title,
+      title: (m && (m.fmTitle || m.headingTitle)) || doc.title,
       headings: extractHeadings(content),
       tags: (m && m.tags) || [],
     });
@@ -636,12 +696,17 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       renderMessage('Render failed', String((err && err.message) || err));
       return;
     }
-    const titleChanged = recordMeta(path, rd.meta);
+    let headingTitle = null;
+    if (rd.toc.length) {
+      const minLevel = Math.min(...rd.toc.map((t) => t.level));
+      headingTitle = (rd.toc.find((t) => t.level === minLevel) || {}).text || null;
+    }
+    const titleChanged = recordMeta(path, rd.meta, headingTitle);
     if (titleChanged) renderTree();
 
     const m = metaByPath.get(path);
     const doc = docByPath.get(path);
-    const title = (m && m.title) || (doc && doc.title) || basename(path);
+    const title = displayTitle(path);
     document.title = `${title} · Docs · ${client.owner}/${client.repo}`;
     refs.editGh.href = client.editUrl(path);
     refs.openGh.href = client.blobUrl(path);
@@ -743,8 +808,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       if (i === segs.length - 1) {
         const cur = document.createElement('span');
         cur.className = 'gdt-crumb-current';
-        const m = metaByPath.get(path);
-        cur.textContent = (m && m.title) || seg;
+        cur.textContent = displayTitle(path) || seg;
         crumbs.appendChild(cur);
       } else {
         const node = findNode(tree, acc);
@@ -774,8 +838,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       l.textContent = label;
       const t = document.createElement('span');
       t.className = 'gdt-pn-title';
-      const m = metaByPath.get(doc.path);
-      t.textContent = (m && m.title) || doc.title;
+      t.textContent = displayTitle(doc.path);
       a.appendChild(l);
       a.appendChild(t);
       return a;
