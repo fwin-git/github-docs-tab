@@ -709,9 +709,12 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       paintRing(repo);
       const isCurrent = repo === client.repo;
       const body = document.createElement('div');
-      // Prompt shown when expanding an unindexed, non-current repo.
+      // Prompt shown when expanding an unindexed, non-current repo. Reads the
+      // LIVE index state (not the render-time `repoIndexed`) so a repo indexed
+      // via this prompt is not re-prompted after collapse/expand.
       const maybePrompt = () => {
-        if (isCurrent || repoIndexed || orgSession.browseAck.has(repo)) return;
+        const indexedNow = (orgSession.repoState.get(repo) || {}).phase === 'done';
+        if (isCurrent || indexedNow || orgSession.browseAck.has(repo)) return;
         if (body.querySelector('.gdt-org-prompt')) return;
         const prompt = h(`<div class="gdt-org-prompt"><span>Index <b>${md.utils.escapeHtml(repo)}</b> so it appears in search?</span><span class="gdt-org-prompt-btns"><button type="button" class="gdt-btn gdt-btn-sm gdt-btn-primary" data-p-index>Index</button><button type="button" class="gdt-btn gdt-btn-sm" data-p-browse>Just browse</button></span></div>`);
         prompt.querySelector('[data-p-index]').addEventListener('click', () => {
@@ -2022,7 +2025,10 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     } finally {
       if (orgSession) {
         orgSession.indexing = false;
-        updateOrgBarLabel();
+        // Re-render so newly-indexed repos un-fade and their render-time
+        // closures pick up the fresh state (no stale re-prompts). Expansion
+        // state persists across renderTree, so open repos stay open.
+        renderTree();
       }
     }
   }
