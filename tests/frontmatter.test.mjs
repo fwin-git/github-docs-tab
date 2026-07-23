@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFrontmatter, normalizeTags, docTitle } from '../src/common/frontmatter.js';
+import { parseFrontmatter, normalizeTags, docTitle, isPinned } from '../src/common/frontmatter.js';
 
 test('no frontmatter passes content through', () => {
   const src = '# Title\n\nBody.';
@@ -76,6 +76,17 @@ test('normalizeTags handles arrays, comma strings, and fallbacks', () => {
   assert.deepEqual(normalizeTags({}), []);
   assert.deepEqual(normalizeTags(null), []);
   assert.deepEqual(normalizeTags({ tags: [1, true, 'ok'] }), ['1', 'true', 'ok']);
+});
+
+test('isPinned recognizes pinned/pin frontmatter flags', () => {
+  assert.equal(isPinned({ pinned: true }), true);
+  assert.equal(isPinned({ pin: true }), true);
+  assert.equal(isPinned({ pinned: 'true' }), true);
+  assert.equal(isPinned({ pinned: 'yes' }), true);
+  assert.equal(isPinned({ pinned: false }), false);
+  assert.equal(isPinned({ pinned: 'no' }), false);
+  assert.equal(isPinned({}), false);
+  assert.equal(isPinned(null), false);
 });
 
 test('docTitle prefers frontmatter title, coerces non-strings', () => {

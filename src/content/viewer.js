@@ -10,7 +10,7 @@ import {
 } from '../common/docs-model.js';
 import { buildResolver } from '../common/wikilinks.js';
 import { ContentIndex } from '../common/search.js';
-import { normalizeTags, docTitle, parseFrontmatter } from '../common/frontmatter.js';
+import { normalizeTags, docTitle, parseFrontmatter, isPinned } from '../common/frontmatter.js';
 import { resolveRelative, splitAnchor, isMarkdownPath, dirname, basename } from '../common/paths.js';
 import { buildHash } from '../common/route.js';
 import { githubSlug } from '../common/slugger.js';
@@ -26,6 +26,10 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"></path></svg>',
   file:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path></svg>',
+  folder:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>',
+  pin:
+    '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.456.734a1.75 1.75 0 0 1 2.826.504l.613 1.327a3.081 3.081 0 0 0 2.084 1.707l2.454.584c1.332.317 1.8 1.972.832 2.94L11.06 10l3.72 3.72a.749.749 0 1 1-1.06 1.06L10 11.06l-2.204 2.205c-.968.968-2.623.5-2.94-.832l-.584-2.454a3.081 3.081 0 0 0-1.707-2.084l-1.327-.613a1.75 1.75 0 0 1-.504-2.826L4.456.734ZM5.92 1.866a.25.25 0 0 0-.404-.072L1.794 5.516a.25.25 0 0 0 .072.404l1.328.613A4.582 4.582 0 0 1 5.73 9.63l.584 2.454a.25.25 0 0 0 .42.12l5.47-5.47a.25.25 0 0 0-.12-.42L9.63 5.73a4.581 4.581 0 0 1-3.098-2.537L5.92 1.866Z"></path></svg>',
   search:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>',
   refresh:
@@ -63,6 +67,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   const expansion = new Set();
   const indexState = { started: false, finished: false, done: 0, total: docs.length };
   let theme = settings.theme || 'auto';
+  let treeFilter = '';
 
   // ---- markdown context -----------------------------------------------------
 
@@ -156,6 +161,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       tags: normalizeTags(data),
       order: typeof data.order === 'number' ? data.order : undefined,
       sidebar_position: typeof data.sidebar_position === 'number' ? data.sidebar_position : undefined,
+      pinned: isPinned(data),
       data,
     };
     const prev = metaByPath.get(path);
@@ -182,7 +188,12 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
               <button class="gdt-iconbtn" data-gdt-refresh type="button" title="Refresh docs list">${ICONS.refresh}</button>
             </div>
             <div class="gdt-truncated" data-gdt-truncated hidden></div>
+            <input class="gdt-filter-input" data-gdt-filter type="search" placeholder="Filter files…" autocomplete="off" spellcheck="false" aria-label="Filter file tree" />
             <div class="gdt-tags" data-gdt-tags hidden></div>
+            <div class="gdt-pinned" data-gdt-pinned hidden>
+              <div class="gdt-pinned-title">${ICONS.pin} Pinned</div>
+              <div class="gdt-pinned-list" data-gdt-pinned-list></div>
+            </div>
             <nav class="gdt-tree" data-gdt-tree aria-label="Documentation files"></nav>
             <div class="gdt-side-foot" data-gdt-progress hidden aria-live="polite"></div>
           </aside>
@@ -213,7 +224,10 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       sidebar: root.querySelector('[data-gdt-sidebar]'),
       countLabel: root.querySelector('[data-gdt-count-label]'),
       truncatedBox: root.querySelector('[data-gdt-truncated]'),
+      filter: root.querySelector('[data-gdt-filter]'),
       tags: root.querySelector('[data-gdt-tags]'),
+      pinned: root.querySelector('[data-gdt-pinned]'),
+      pinnedList: root.querySelector('[data-gdt-pinned-list]'),
       tree: root.querySelector('[data-gdt-tree]'),
       progress: root.querySelector('[data-gdt-progress]'),
       crumbs: root.querySelector('[data-gdt-crumbs]'),
@@ -245,6 +259,23 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       root.classList.toggle('gdt-side-open');
     });
     refs.themeToggle.addEventListener('click', cycleTheme);
+
+    let filterTimer = 0;
+    refs.filter.addEventListener('input', () => {
+      clearTimeout(filterTimer);
+      filterTimer = setTimeout(() => {
+        treeFilter = refs.filter.value.trim().toLowerCase();
+        renderTree();
+      }, 100);
+    });
+    refs.filter.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && refs.filter.value) {
+        e.stopPropagation();
+        refs.filter.value = '';
+        treeFilter = '';
+        renderTree();
+      }
+    });
 
     root.addEventListener('click', onRootClick);
   }
@@ -357,10 +388,30 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     }
   }
 
+  function docLabel(child) {
+    const m = metaByPath.get(child.path);
+    return (m && m.title) || child.doc.title;
+  }
+
+  function matchesFilter(child) {
+    if (!treeFilter) return true;
+    const hay = `${docLabel(child)} ${child.path}`.toLowerCase();
+    return treeFilter.split(/\s+/).every((tok) => hay.includes(tok));
+  }
+
   function renderTree() {
     const treeEl = refs.tree;
     treeEl.textContent = '';
-    treeEl.appendChild(renderNodes(tree, 0));
+    const list = renderNodes(tree, 0);
+    if (treeFilter && !list.querySelector('a')) {
+      const empty = document.createElement('div');
+      empty.className = 'gdt-tree-empty';
+      empty.textContent = 'No files match the filter';
+      treeEl.appendChild(empty);
+    } else {
+      treeEl.appendChild(list);
+    }
+    renderPinned();
     markSelection();
   }
 
@@ -370,38 +421,33 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     for (const child of node.children) {
       const li = document.createElement('li');
       if (child.isDir) {
-        const open = expansion.has(child.path) || depth < 1;
-        if (open) expansion.add(child.path);
+        const sub = renderNodes(child, depth + 1);
+        if (treeFilter && !sub.querySelector('a')) continue; // no matching descendants
+        const open = treeFilter ? true : expansion.has(child.path) || depth < 1;
+        if (open && !treeFilter) expansion.add(child.path);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'gdt-dir' + (open ? ' gdt-open' : '');
-        btn.innerHTML = `<span class="gdt-chevron">${ICONS.chevron}</span>`;
+        btn.innerHTML = `<span class="gdt-chevron">${ICONS.chevron}</span><span class="gdt-folder-ico">${ICONS.folder}</span>`;
         btn.appendChild(Object.assign(document.createElement('span'), { textContent: child.name, className: 'gdt-label' }));
         btn.addEventListener('click', () => {
           if (expansion.has(child.path)) expansion.delete(child.path);
           else expansion.add(child.path);
-          const sub = li.querySelector(':scope > ul');
           const nowOpen = expansion.has(child.path);
           btn.classList.toggle('gdt-open', nowOpen);
-          if (sub) sub.hidden = !nowOpen;
+          sub.hidden = !nowOpen;
         });
         li.appendChild(btn);
-        const sub = renderNodes(child, depth + 1);
         sub.hidden = !open;
         li.appendChild(sub);
       } else {
+        if (!matchesFilter(child)) continue;
         const a = document.createElement('a');
         a.className = 'gdt-file';
         a.href = buildHash({ path: child.path });
         a.setAttribute('data-gdt-tree-path', child.path);
         a.innerHTML = `<span class="gdt-file-ico">${ICONS.file}</span>`;
-        const m = metaByPath.get(child.path);
-        a.appendChild(
-          Object.assign(document.createElement('span'), {
-            textContent: (m && m.title) || child.doc.title,
-            className: 'gdt-label',
-          })
-        );
+        a.appendChild(Object.assign(document.createElement('span'), { textContent: docLabel(child), className: 'gdt-label' }));
         li.appendChild(a);
       }
       ul.appendChild(li);
@@ -409,14 +455,41 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     return ul;
   }
 
-  function markSelection() {
-    for (const el of refs.tree.querySelectorAll('a[aria-current]')) el.removeAttribute('aria-current');
-    if (!currentPath) return;
-    const el = refs.tree.querySelector(`a[data-gdt-tree-path="${cssEscape(currentPath)}"]`);
-    if (el) {
-      el.setAttribute('aria-current', 'page');
-      el.scrollIntoView({ block: 'nearest' });
+  function renderPinned() {
+    const pinnedDocs = docs.filter((d) => {
+      const m = metaByPath.get(d.path);
+      if (!m || !m.pinned) return false;
+      if (!treeFilter) return true;
+      const hay = `${m.title} ${d.path}`.toLowerCase();
+      return treeFilter.split(/\s+/).every((tok) => hay.includes(tok));
+    });
+    refs.pinnedList.textContent = '';
+    if (!pinnedDocs.length) {
+      refs.pinned.hidden = true;
+      return;
     }
+    refs.pinned.hidden = false;
+    for (const d of pinnedDocs) {
+      const m = metaByPath.get(d.path);
+      const a = document.createElement('a');
+      a.className = 'gdt-file gdt-pin-item';
+      a.href = buildHash({ path: d.path });
+      a.setAttribute('data-gdt-tree-path', d.path);
+      a.innerHTML = `<span class="gdt-file-ico gdt-pin-ico">${ICONS.pin}</span>`;
+      a.appendChild(
+        Object.assign(document.createElement('span'), { textContent: (m && m.title) || d.title, className: 'gdt-label' })
+      );
+      refs.pinnedList.appendChild(a);
+    }
+  }
+
+  function markSelection() {
+    for (const el of refs.sidebar.querySelectorAll('a[aria-current]')) el.removeAttribute('aria-current');
+    if (!currentPath) return;
+    const els = refs.sidebar.querySelectorAll(`a[data-gdt-tree-path="${cssEscape(currentPath)}"]`);
+    els.forEach((el) => el.setAttribute('aria-current', 'page'));
+    const inTree = refs.tree.querySelector(`a[data-gdt-tree-path="${cssEscape(currentPath)}"]`);
+    if (inTree) inTree.scrollIntoView({ block: 'nearest' });
   }
 
   function expandAncestors(path) {

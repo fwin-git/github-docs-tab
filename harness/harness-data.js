@@ -39,6 +39,7 @@ Please read the [Getting Started](docs/getting-started.md) guide first. Broken w
 title: Getting Started
 tags: [guide, intro]
 order: 1
+pinned: true
 description: How to get going quickly.
 ---
 
@@ -88,6 +89,7 @@ graph TD; A-->B;
     'docs/api/index.md': `---
 title: API Reference
 tags: [api]
+pin: true
 ---
 
 # API

@@ -141,6 +141,14 @@ export function normalizeTags(data) {
   return out;
 }
 
+export function isPinned(data) {
+  if (!data || typeof data !== 'object') return false;
+  const v = data.pinned ?? data.pin;
+  if (v === true) return true;
+  if (typeof v === 'string') return /^(true|yes|1)$/i.test(v.trim());
+  return false;
+}
+
 export function docTitle(data, fallback) {
   const t = data && data.title != null ? String(data.title).trim() : '';
   return t || fallback;
