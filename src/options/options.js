@@ -2,8 +2,22 @@ import { DEFAULTS, loadSettings, saveSettings } from '../common/settings.js';
 
 const $ = (id) => document.getElementById(id);
 
+function tokenType(t) {
+  if (t.startsWith('github_pat_')) return 'fine-grained';
+  if (t.startsWith('ghp_')) return 'classic';
+  if (t.startsWith('gho_') || t.startsWith('ghs_')) return 'app/oauth';
+  return 'unrecognized prefix';
+}
+
+function showSaved(s) {
+  $('saved-token').textContent = s.token
+    ? `Currently saved: ${s.token.slice(0, 10)}… (${s.token.length} chars, ${tokenType(s.token)}). The extension uses this saved value — if it does not match what you pasted, a password manager may have autofilled the field before saving.`
+    : 'Currently saved: no token (anonymous access).';
+}
+
 function fill(s) {
   $('token').value = s.token;
+  showSaved(s);
   $('folders').value = s.docsFolders.join('\n');
   $('include-root').checked = s.includeRootFiles;
   $('show-badge').checked = s.showBadge;
@@ -39,6 +53,7 @@ async function init() {
       contentSearchLimitKB: clamp($('search-limit').value, 10, 2000, DEFAULTS.contentSearchLimitKB),
     });
     showStatus($('save-status'), 'Saved — reload open GitHub tabs to apply.', true);
+    showSaved(await loadSettings());
     setTimeout(() => ($('save-status').hidden = true), 4000);
   });
 
@@ -50,7 +65,7 @@ async function init() {
   });
 
   $('test-token').addEventListener('click', async () => {
-    const token = $('token').value.trim();
+    const token = $('token').value.trim() || (await loadSettings()).token;
     const status = $('token-status');
     if (!token) {
       showStatus(status, 'No token entered — the extension will use anonymous access.', true);

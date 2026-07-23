@@ -113,6 +113,7 @@ async function scan() {
     me.docs = docs;
     me.truncated = truncated || treeRes.truncated;
     me.total = total;
+    document.documentElement.removeAttribute('data-gdt-error'); // stale diagnostics confuse debugging
     if (docs.length) {
       ensureTab({ owner: me.owner, repo: me.repo, count: total, showBadge: settings.showBadge });
       applyRoute();
