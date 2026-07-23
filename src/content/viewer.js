@@ -7,6 +7,7 @@ import {
   flattenTree,
   findNode,
   dirIndexDoc,
+  displayDocTitle,
 } from '../common/docs-model.js';
 import { buildResolver } from '../common/wikilinks.js';
 import { ContentIndex } from '../common/search.js';
@@ -177,9 +178,14 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   }
 
   function displayTitleOf(rec, doc) {
-    const fallback = doc ? doc.title : null;
-    if (titleMode === 'filename') return fallback || (rec && rec.fmTitle) || '';
-    return (rec && (rec.headingTitle || rec.fmTitle)) || fallback || '';
+    return displayDocTitle(
+      {
+        fmTitle: rec ? rec.fmTitle : null,
+        headingTitle: rec ? rec.headingTitle : null,
+        fallback: doc ? doc.title : null,
+      },
+      titleMode
+    );
   }
 
   function displayTitle(path) {
@@ -430,8 +436,8 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     refs.titleToggle.innerHTML = titleMode === 'heading' ? ICONS.heading : ICONS.file;
     refs.titleToggle.title =
       titleMode === 'heading'
-        ? 'Sidebar titles: first headline of each document — click for filenames'
-        : 'Sidebar titles: filenames — click for first headline of each document';
+        ? 'Sidebar titles: document titles (frontmatter title, else first headline) — click for filenames'
+        : 'Sidebar titles: filenames — click for document titles';
   }
 
   function cycleTheme() {

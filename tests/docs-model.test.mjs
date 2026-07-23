@@ -8,6 +8,7 @@ import {
   findNode,
   dirIndexDoc,
   prettifyName,
+  displayDocTitle,
   DEFAULT_FOLDERS,
 } from '../src/common/docs-model.js';
 
@@ -152,6 +153,20 @@ test('findNode locates files and directories', () => {
   assert.equal(findNode(root, 'docs/sub/b.md').doc.path, 'docs/sub/b.md');
   assert.equal(findNode(root, 'docs/sub').isDir, true);
   assert.equal(findNode(root, 'nope'), null);
+});
+
+test('displayDocTitle: heading mode prefers frontmatter title, then headline, then filename', () => {
+  const full = { fmTitle: 'Declared', headingTitle: 'Derived', fallback: 'file-name' };
+  assert.equal(displayDocTitle(full, 'heading'), 'Declared');
+  assert.equal(displayDocTitle({ ...full, fmTitle: null }, 'heading'), 'Derived');
+  assert.equal(displayDocTitle({ fmTitle: null, headingTitle: null, fallback: 'file-name' }, 'heading'), 'file-name');
+  assert.equal(displayDocTitle({ fmTitle: null, headingTitle: null, fallback: null }, 'heading'), '');
+});
+
+test('displayDocTitle: filename mode always shows the filename', () => {
+  const full = { fmTitle: 'Declared', headingTitle: 'Derived', fallback: 'file-name' };
+  assert.equal(displayDocTitle(full, 'filename'), 'file-name');
+  assert.equal(displayDocTitle({ ...full, fallback: null }, 'filename'), 'Declared');
 });
 
 test('dirIndexDoc finds README or index inside a directory', () => {

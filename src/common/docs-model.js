@@ -137,6 +137,15 @@ export function findNode(root, path) {
   return null;
 }
 
+// Display-title precedence. 'heading' mode: a declared frontmatter title
+// always beats the headline derived from content, which beats the filename.
+// 'filename' mode: the filename, full stop (titles only as last resort when
+// there is no filename, e.g. dynamically loaded docs).
+export function displayDocTitle({ fmTitle, headingTitle, fallback }, mode) {
+  if (mode === 'filename') return fallback || fmTitle || headingTitle || '';
+  return fmTitle || headingTitle || fallback || '';
+}
+
 export function dirIndexDoc(dirNode) {
   if (!dirNode || !dirNode.isDir) return null;
   const hit = dirNode.children.find((c) => !c.isDir && isIndexName(c.name));
