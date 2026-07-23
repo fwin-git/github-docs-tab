@@ -2,6 +2,60 @@ import { ext } from '../common/browser.js';
 import { loadSettings } from '../common/settings.js';
 import { clearTreeCaches } from '../content/github-api.js';
 
+function ago(ts) {
+  if (!ts) return '';
+  const min = Math.round((Date.now() - ts) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} h ago`;
+  return `${Math.round(h / 24)} d ago`;
+}
+
+async function renderCache() {
+  const all = await ext.storage.local.get(null);
+  const items = Object.entries(all)
+    .filter(([k]) => k.startsWith('gdt:tree:'))
+    .map(([key, v]) => ({ key, repo: key.slice('gdt:tree:'.length), fetchedAt: (v && v.fetchedAt) || 0 }))
+    .sort((a, b) => b.fetchedAt - a.fetchedAt);
+
+  document.getElementById('cache-count').textContent = `Cached repositories (${items.length})`;
+  const list = document.getElementById('cache-list');
+  list.textContent = '';
+  if (!items.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'None yet — visit a repo with docs.';
+    list.appendChild(li);
+    return;
+  }
+  for (const item of items) {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `https://github.com/${item.repo}#docs`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = item.repo;
+    a.title = `Open ${item.repo} docs`;
+    const age = document.createElement('span');
+    age.className = 'age';
+    age.textContent = ago(item.fetchedAt);
+    const evict = document.createElement('button');
+    evict.type = 'button';
+    evict.className = 'evict';
+    evict.textContent = '×';
+    evict.title = 'Remove this cached listing';
+    evict.addEventListener('click', async () => {
+      await ext.storage.local.remove(item.key);
+      renderCache();
+    });
+    li.appendChild(a);
+    li.appendChild(age);
+    li.appendChild(evict);
+    list.appendChild(li);
+  }
+}
+
 async function init() {
   const dot = document.getElementById('token-dot');
   const text = document.getElementById('token-text');
@@ -27,7 +81,10 @@ async function init() {
     const status = document.getElementById('status');
     status.textContent = `Cleared ${n} cached repo listing${n === 1 ? '' : 's'}.`;
     status.hidden = false;
+    renderCache();
   });
+
+  renderCache();
 }
 
 init();
