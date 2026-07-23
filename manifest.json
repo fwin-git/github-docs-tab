@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub Docs Tab",
+  "version": "0.1.0",
+  "description": "Adds a Docs tab to GitHub repositories: browse, search, and read a repo's markdown documentation without digging through the file tree.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "GitHub Docs Tab",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "github-docs-tab@tue.ellis.eu",
+      "strict_min_version": "121.0"
+    }
+  }
+}

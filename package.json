@@ -1,0 +1,23 @@
+{
+  "name": "github-docs-tab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser extension that adds a Docs tab to GitHub repositories with a full markdown documentation viewer.",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "zip": "node build.mjs --zip",
+    "icons": "node icons/gen-icons.mjs",
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.0",
+    "highlight.js": "^11.10.0",
+    "markdown-it": "^14.1.0",
+    "markdown-it-footnote": "^4.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
