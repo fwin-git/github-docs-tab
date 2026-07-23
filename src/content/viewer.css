@@ -1470,3 +1470,112 @@
   font-size: 16px;
   padding: 0 2px;
 }
+
+/* ---- drafts (staged session edits) ---------------------------------------- */
+
+#gdt-root .gdt-drafts {
+  padding: 2px 0 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--gdt-border-muted);
+}
+
+#gdt-root .gdt-drafts-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--gdt-done);
+  padding: 4px 6px 6px;
+}
+
+#gdt-root .gdt-draft-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+#gdt-root .gdt-draft-row .gdt-file {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#gdt-root .gdt-file.gdt-draft-item {
+  background: var(--gdt-attention-bg);
+  margin-bottom: 2px;
+}
+
+#gdt-root .gdt-draft-x {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--gdt-fg-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+#gdt-root .gdt-draft-x:hover {
+  color: var(--gdt-danger);
+}
+
+#gdt-root .gdt-drafts-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 4px 0;
+}
+
+#gdt-root .gdt-btn-sm {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+#gdt-root .gdt-file.gdt-has-draft .gdt-label::after {
+  content: '●';
+  color: var(--gdt-attention);
+  font-size: 9px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+#gdt-root .gdt-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--gdt-attention);
+  background: var(--gdt-attention-bg);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--gdt-fg);
+}
+
+#gdt-root .gdt-draft-banner svg {
+  flex: none;
+  color: var(--gdt-attention);
+}
+
+#gdt-root .gdt-draft-banner span {
+  margin-right: auto;
+}
+
+#gdt-root .gdt-session-files {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  max-height: 130px;
+  overflow-y: auto;
+  border: 1px solid var(--gdt-border-muted);
+  border-radius: 6px;
+  background: var(--gdt-bg-muted);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+#gdt-root .gdt-session-files li {
+  padding: 2px 0;
+}

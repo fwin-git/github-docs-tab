@@ -23,6 +23,7 @@ import { saveSettings } from '../common/settings.js';
 import { createMarkdownIt } from './markdown.js';
 import { renderDoc } from './render-doc.js';
 import { createSearchUI } from './search-ui.js';
+import { loadDrafts, saveDraft, removeDraft, clearDrafts } from './drafts.js';
 import { RateLimitError } from './github-api.js';
 
 const ICONS = {
@@ -85,7 +86,14 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   let theme = settings.theme || 'auto';
   let titleMode = settings.titleMode === 'filename' ? 'filename' : 'heading';
   let treeFilter = '';
-  let editor = null; // { path, original, el, textarea, preview, status, dirty, buttons }
+  let editor = null; // { path, original, savedDraftContent, el, textarea, preview, status, dirty, buttons }
+  let drafts = {}; // { [path]: {content, baseSha, savedAt} } — staged session edits
+  loadDrafts(client.owner, client.repo).then((d) => {
+    drafts = d;
+    if (mounted) {
+      renderTree();
+    }
+  });
 
   // ---- markdown context -----------------------------------------------------
 
@@ -253,6 +261,14 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
               <div class="gdt-pinned-title">${ICONS.pin} Pinned</div>
               <div class="gdt-pinned-list" data-gdt-pinned-list></div>
             </div>
+            <div class="gdt-drafts" data-gdt-drafts hidden>
+              <div class="gdt-drafts-title">${ICONS.edit} Drafts <span data-gdt-drafts-count></span></div>
+              <div class="gdt-drafts-list" data-gdt-drafts-list></div>
+              <div class="gdt-drafts-actions">
+                <button type="button" class="gdt-btn gdt-btn-sm gdt-btn-primary" data-gdt-publish-session>Publish session…</button>
+                <button type="button" class="gdt-btn gdt-btn-sm" data-gdt-discard-session>Discard all</button>
+              </div>
+            </div>
             <nav class="gdt-tree" data-gdt-tree aria-label="Documentation files"></nav>
             <div class="gdt-side-foot" data-gdt-progress hidden aria-live="polite"></div>
           </aside>
@@ -289,6 +305,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       tags: root.querySelector('[data-gdt-tags]'),
       pinned: root.querySelector('[data-gdt-pinned]'),
       pinnedList: root.querySelector('[data-gdt-pinned-list]'),
+      draftsBox: root.querySelector('[data-gdt-drafts]'),
+      draftsList: root.querySelector('[data-gdt-drafts-list]'),
+      draftsCount: root.querySelector('[data-gdt-drafts-count]'),
       tree: root.querySelector('[data-gdt-tree]'),
       progress: root.querySelector('[data-gdt-progress]'),
       titleToggle: root.querySelector('[data-gdt-title-toggle]'),
@@ -337,6 +356,13 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       root.classList.toggle('gdt-side-open');
     });
     refs.themeToggle.addEventListener('click', cycleTheme);
+    root.querySelector('[data-gdt-publish-session]').addEventListener('click', openSessionModal);
+    root.querySelector('[data-gdt-discard-session]').addEventListener('click', async () => {
+      if (!window.confirm(`Discard all ${Object.keys(drafts).length} drafted change(s)?`)) return;
+      drafts = await clearDrafts(client.owner, client.repo);
+      renderTree();
+      if (currentPath) refreshDraftBanner();
+    });
     refs.liveEdit.addEventListener('click', () => {
       if (currentPath) openEditor(currentPath);
     });
@@ -542,6 +568,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       treeEl.appendChild(list);
     }
     renderPinned();
+    renderDrafts();
     markSelection();
   }
 
@@ -573,7 +600,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       } else {
         if (!matchesFilter(child)) continue;
         const a = document.createElement('a');
-        a.className = 'gdt-file';
+        a.className = 'gdt-file' + (drafts[child.path] ? ' gdt-has-draft' : '');
         a.href = buildHash({ path: child.path });
         a.setAttribute('data-gdt-tree-path', child.path);
         a.innerHTML = `<span class="gdt-file-ico">${ICONS.file}</span>`;
@@ -609,6 +636,36 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
         Object.assign(document.createElement('span'), { textContent: displayTitle(d.path), className: 'gdt-label' })
       );
       refs.pinnedList.appendChild(a);
+    }
+  }
+
+  function renderDrafts() {
+    const paths = Object.keys(drafts);
+    refs.draftsBox.hidden = !paths.length;
+    refs.draftsCount.textContent = paths.length ? `(${paths.length})` : '';
+    refs.draftsList.textContent = '';
+    for (const path of paths) {
+      const row = document.createElement('div');
+      row.className = 'gdt-draft-row';
+      const a = document.createElement('a');
+      a.className = 'gdt-file gdt-draft-item';
+      a.href = buildHash({ path });
+      a.setAttribute('data-gdt-tree-path', path);
+      a.appendChild(Object.assign(document.createElement('span'), { textContent: displayTitle(path), className: 'gdt-label' }));
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'gdt-draft-x';
+      x.textContent = '×';
+      x.title = 'Discard this draft';
+      x.addEventListener('click', async (e) => {
+        e.preventDefault();
+        drafts = await removeDraft(client.owner, client.repo, path);
+        renderTree();
+        if (currentPath === path) refreshDraftBanner();
+      });
+      row.appendChild(a);
+      row.appendChild(x);
+      refs.draftsList.appendChild(row);
     }
   }
 
@@ -790,6 +847,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     refs.copyMd.disabled = false;
 
     refs.article.textContent = '';
+    refreshDraftBanner();
     const header = buildArticleHeader(path, m, doc, rd);
     if (header) refs.article.appendChild(header);
     const body = document.createElement('div');
@@ -800,6 +858,144 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     renderToc(rd.toc);
     if (heading) scrollToHeading(heading);
     else window.scrollTo({ top: 0 });
+  }
+
+  // Slim banner shown at the top of drafted documents in reading mode.
+  function refreshDraftBanner() {
+    refs.article.querySelector('.gdt-draft-banner')?.remove();
+    if (!currentPath || !drafts[currentPath]) return;
+    const banner = h(`
+      <div class="gdt-draft-banner">
+        ${ICONS.edit}
+        <span>You have a drafted edit for this document.</span>
+        <button type="button" class="gdt-btn gdt-btn-sm" data-b-edit>Continue editing</button>
+        <button type="button" class="gdt-btn gdt-btn-sm" data-b-discard>Discard draft</button>
+      </div>
+    `);
+    const path = currentPath;
+    banner.querySelector('[data-b-edit]').addEventListener('click', () => openEditor(path));
+    banner.querySelector('[data-b-discard]').addEventListener('click', async () => {
+      drafts = await removeDraft(client.owner, client.repo, path);
+      renderTree();
+      banner.remove();
+    });
+    refs.article.insertBefore(banner, refs.article.firstChild);
+  }
+
+  async function ensureBaseSource(path) {
+    let base = contentCache.get(path);
+    if (base == null) {
+      base = await client.getRawText(path);
+      contentCache.set(path, base);
+    }
+    return base;
+  }
+
+  function openSessionModal() {
+    const paths = Object.keys(drafts);
+    if (!paths.length) return;
+    const backdrop = h(`
+      <div class="gdt-modal-backdrop">
+        <div class="gdt-modal" role="dialog" aria-label="Publish drafted changes">
+          <h3>Publish session (${paths.length} file${paths.length === 1 ? '' : 's'})</h3>
+          <ul class="gdt-session-files" data-s-files></ul>
+          <label>Commit message base <input data-s-msg autocomplete="off" spellcheck="false" /></label>
+          <label>Branch name <input data-s-branch autocomplete="off" spellcheck="false" /></label>
+          <label>Pull request title <input data-s-title autocomplete="off" /></label>
+          <label>Description <textarea data-s-body rows="4"></textarea></label>
+          <p class="gdt-modal-note" data-s-note></p>
+          <div class="gdt-modal-actions">
+            <button type="button" class="gdt-btn" data-s-cancel>Cancel</button>
+            <button type="button" class="gdt-btn" data-s-patch title="One multi-file unified diff — apply with git apply">Download .patch</button>
+            <button type="button" class="gdt-btn gdt-btn-primary" data-s-go>Create pull request</button>
+          </div>
+          <p class="gdt-modal-progress" data-s-progress hidden aria-live="polite"></p>
+        </div>
+      </div>
+    `);
+    const q = (sel) => backdrop.querySelector(sel);
+    const filesEl = q('[data-s-files]');
+    for (const path of paths) {
+      const li = document.createElement('li');
+      li.textContent = path;
+      filesEl.appendChild(li);
+    }
+    const msg = paths.length === 1 ? defaultCommitMessage(paths[0]) : `docs: update ${paths.length} documents`;
+    q('[data-s-msg]').value = msg;
+    q('[data-s-branch]').value = `docs-tab/session-${Math.random().toString(36).slice(2, 8)}`;
+    q('[data-s-title]').value = msg;
+    q('[data-s-body]').value = `Updates:\n${paths.map((p) => `- ${p}`).join('\n')}\n\nProposed from the GitHub Docs Tab extension.`;
+    if (!client.hasToken) {
+      q('[data-s-note]').textContent =
+        'Creating the PR needs a GitHub token (extension options). The .patch download works without one.';
+      q('[data-s-go]').disabled = true;
+    } else {
+      q('[data-s-note]').textContent =
+        'Creates one branch with a commit per file, then opens a single pull request (your fork is used automatically without push access).';
+    }
+    const closeModal = () => backdrop.remove();
+    q('[data-s-cancel]').addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal();
+    });
+    q('[data-s-patch]').addEventListener('click', async () => {
+      const progress = q('[data-s-progress]');
+      progress.hidden = false;
+      progress.textContent = 'Building patch…';
+      try {
+        let patch = '';
+        for (const path of paths) {
+          patch += buildUnifiedPatch(path, await ensureBaseSource(path), drafts[path].content);
+        }
+        if (!patch) {
+          progress.textContent = 'Drafts are identical to the repository — nothing to patch.';
+          return;
+        }
+        const url = URL.createObjectURL(new Blob([patch], { type: 'text/x-patch' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'docs-session.patch';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        progress.textContent = 'Patch downloaded — apply with: git apply docs-session.patch';
+      } catch (err) {
+        progress.textContent = `Failed: ${(err && err.message) || err}`;
+      }
+    });
+    q('[data-s-go]').addEventListener('click', async () => {
+      const progress = q('[data-s-progress]');
+      progress.hidden = false;
+      q('[data-s-go]').disabled = true;
+      q('[data-s-cancel]').disabled = true;
+      try {
+        const result = await client.createBatchPr({
+          files: paths.map((p) => ({ path: p, content: drafts[p].content })),
+          message: q('[data-s-msg]').value.trim() || msg,
+          branch: q('[data-s-branch]').value.trim() || `docs-tab/session-${Math.random().toString(36).slice(2, 8)}`,
+          title: q('[data-s-title]').value.trim() || msg,
+          body: q('[data-s-body]').value,
+          onProgress: (t) => (progress.textContent = t),
+        });
+        drafts = await clearDrafts(client.owner, client.repo);
+        renderTree();
+        refreshDraftBanner();
+        const panel = q('.gdt-modal');
+        panel.textContent = '';
+        panel.appendChild(
+          h(
+            `<div><h3>Pull request created</h3><p><a class="gdt-btn gdt-btn-primary" target="_blank" rel="noopener noreferrer" href="${result.url}">Open pull request #${result.number} ↗</a></p><p><button type="button" class="gdt-btn" data-s-close>Close</button></p></div>`
+          )
+        );
+        panel.querySelector('[data-s-close]').addEventListener('click', closeModal);
+      } catch (err) {
+        progress.textContent = `Failed: ${(err && err.message) || err}`;
+        q('[data-s-go]').disabled = false;
+        q('[data-s-cancel]').disabled = false;
+      }
+    });
+    root.appendChild(backdrop);
   }
 
   function buildArticleHeader(path, m, doc, rd) {
@@ -1048,13 +1244,17 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     }
     refs.toc.hidden = true;
     refs.article.textContent = '';
-    buildEditor(path, source);
+    buildEditor(path, source, drafts[path] ? drafts[path].content : null);
     updateEditorState(true);
   }
 
   function closeEditor(silent) {
     if (!editor) return true;
-    if (!silent && editor.dirty && !window.confirm('Discard your unsaved edits?')) return false;
+    const val = editor.textarea.value;
+    const unsaved = val !== editor.original && val !== editor.savedDraftContent;
+    if (!silent && unsaved && !window.confirm('Discard your unsaved edits? (Use "Save draft" to keep them for this session.)')) {
+      return false;
+    }
     const path = editor.path;
     editor.el.remove();
     editor = null;
@@ -1065,7 +1265,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     return true;
   }
 
-  function buildEditor(path, source) {
+  function buildEditor(path, source, draftContent) {
     const el = h(`
       <div class="gdt-editor">
         <div class="gdt-ed-toolbar" data-ed-toolbar>
@@ -1079,6 +1279,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
           <span class="gdt-ed-status" data-ed-status></span>
           <span class="gdt-ed-actions">
             <button type="button" class="gdt-btn" data-ed-cancel>Cancel</button>
+            <button type="button" class="gdt-btn" data-ed-draft title="Stage this edit locally — batch several files, then publish the session as one PR">Save draft</button>
             <button type="button" class="gdt-btn" data-ed-copy-patch>Copy patch</button>
             <button type="button" class="gdt-btn" data-ed-download>Download .patch</button>
             <button type="button" class="gdt-btn" data-ed-github title="Opens GitHub's own editor pre-filled with your changes — commit with your logged-in account">Propose via GitHub editor</button>
@@ -1088,10 +1289,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       </div>
     `);
     const textarea = el.querySelector('.gdt-ed-source');
-    textarea.value = source;
+    textarea.value = draftContent ?? source;
     editor = {
       path,
       original: source,
+      savedDraftContent: draftContent,
       el,
       textarea,
       preview: el.querySelector('[data-ed-preview]'),
@@ -1145,6 +1347,26 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     });
 
     el.querySelector('[data-ed-cancel]').addEventListener('click', () => closeEditor(false));
+    el.querySelector('[data-ed-draft]').addEventListener('click', async () => {
+      const val = editor.textarea.value;
+      let note;
+      if (val === editor.original) {
+        drafts = await removeDraft(client.owner, client.repo, path);
+        editor.savedDraftContent = null;
+        note = 'No changes vs the repository — draft removed.';
+      } else {
+        drafts = await saveDraft(client.owner, client.repo, path, {
+          content: val,
+          baseSha: (docByPath.get(path) || {}).sha ?? null,
+          savedAt: Date.now(),
+        });
+        editor.savedDraftContent = val;
+        note = `Draft saved — ${Object.keys(drafts).length} file(s) staged in this session.`;
+      }
+      renderTree();
+      updateEditorState(false);
+      editor.status.textContent = note;
+    });
     el.querySelector('[data-ed-download]').addEventListener('click', downloadPatch);
     el.querySelector('[data-ed-copy-patch]').addEventListener('click', copyPatch);
     el.querySelector('[data-ed-github]').addEventListener('click', proposeViaGitHub);
@@ -1157,8 +1379,12 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     if (!editor) return;
     const val = editor.textarea.value;
     editor.dirty = val !== editor.original;
-    editor.status.textContent = editor.dirty ? 'Unsaved changes' : 'No changes yet';
+    const draftBaseline = editor.savedDraftContent ?? editor.original;
+    if (val === editor.savedDraftContent) editor.status.textContent = 'Editing saved draft';
+    else editor.status.textContent = editor.dirty ? 'Unsaved changes' : 'No changes yet';
     for (const b of editor.buttons) b.disabled = !editor.dirty;
+    const draftBtn = editor.el.querySelector('[data-ed-draft]');
+    if (draftBtn) draftBtn.disabled = val === draftBaseline;
     if (renderPreview) {
       try {
         const rd = renderDoc(md, val, { path: editor.path, ctx });

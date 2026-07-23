@@ -2,7 +2,7 @@
 // contents, rate-limit awareness. api.github.com and raw.githubusercontent.com
 // are CORS-open (ACAO: *), so the content script fetches directly.
 import { ext } from '../common/browser.js';
-import { encodePath } from '../common/paths.js';
+import { encodePath, basename } from '../common/paths.js';
 import { toBase64Utf8 } from '../common/edit-utils.js';
 
 const API = 'https://api.github.com';
@@ -268,10 +268,11 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Create branch -> commit the single-file change -> open a PR against the
+  // Create branch -> one commit per file -> open a single PR against the
   // default branch. Forks automatically when the token lacks push access.
-  async function createEditPr({ path, content, message, branch, title, body, onProgress = () => {} }) {
+  async function createBatchPr({ files, message, branch, title, body, onProgress = () => {} }) {
     if (!token) throw new Error('A GitHub token is required (extension options).');
+    if (!files.length) throw new Error('Nothing to publish.');
     const info = await getRepoInfo();
     const base = info.defaultBranch;
 
@@ -308,19 +309,21 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
       });
     }
 
-    onProgress('Committing change…');
-    const existing = await apiJson(
-      'GET',
-      `/repos/${headOwner}/${headRepo}/contents/${encodePath(path)}?ref=${encodeURIComponent(headBranch)}`,
-      null,
-      { allow404: true }
-    );
-    await apiJson('PUT', `/repos/${headOwner}/${headRepo}/contents/${encodePath(path)}`, {
-      message,
-      content: toBase64Utf8(content),
-      branch: headBranch,
-      ...(existing && existing.sha ? { sha: existing.sha } : {}),
-    });
+    for (const file of files) {
+      onProgress(`Committing ${file.path}…`);
+      const existing = await apiJson(
+        'GET',
+        `/repos/${headOwner}/${headRepo}/contents/${encodePath(file.path)}?ref=${encodeURIComponent(headBranch)}`,
+        null,
+        { allow404: true }
+      );
+      await apiJson('PUT', `/repos/${headOwner}/${headRepo}/contents/${encodePath(file.path)}`, {
+        message: files.length > 1 ? `${message}: ${basename(file.path)}` : message,
+        content: toBase64Utf8(file.content),
+        branch: headBranch,
+        ...(existing && existing.sha ? { sha: existing.sha } : {}),
+      });
+    }
 
     onProgress('Opening pull request…');
     const pr = await apiJson('POST', `/repos/${owner}/${repo}/pulls`, {
@@ -331,6 +334,10 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
       maintainer_can_modify: true,
     });
     return { url: pr.html_url, number: pr.number };
+  }
+
+  function createEditPr({ path, content, ...rest }) {
+    return createBatchPr({ files: [{ path, content }], ...rest });
   }
 
   const rawUrl = (path) => `${RAW}/${owner}/${repo}/HEAD/${encodePath(path)}`;
@@ -346,6 +353,7 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     getBlobObjectURL,
     getRepoInfo,
     createEditPr,
+    createBatchPr,
     rawUrl,
     blobUrl,
     editUrl,

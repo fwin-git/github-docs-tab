@@ -75,6 +75,8 @@ Saving is always an explicit, confirmed step, with three routes:
 2. **Create pull request…** — fully automatic, requires an API token (options) with *Contents* and *Pull requests* write permission. Creates a branch from the default branch, commits the single-file change, and opens a PR — using your fork automatically when you lack push access. You get the PR link when it's done.
 3. **Download .patch / Copy patch** — no auth at all. A standard unified diff (`git apply file.patch` or `patch -p1 < file.patch`), generated locally.
 
+**Drafting & batch publishing:** instead of publishing each file immediately, **Save draft** stages the edit locally (per repository, surviving reloads). Drafted files get a dot in the sidebar tree and collect in a **Drafts** section, where you can keep editing, discard individually, or — once you're done with the whole session — hit **Publish session…**: one branch, one commit per file, one pull request (auto-fork as usual), or download the entire session as a single multi-file `.patch`.
+
 ## Options
 
 Click the extension icon → **Options**:
