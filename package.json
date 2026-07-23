@@ -10,7 +10,8 @@
     "zip": "node build.mjs --zip",
     "icons": "node icons/gen-icons.mjs",
     "install-ext": "node cli/install.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "media": "node scripts/capture-media.mjs"
   },
   "dependencies": {
     "dompurify": "^3.2.0",
@@ -19,7 +20,8 @@
     "markdown-it-footnote": "^4.0.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "puppeteer": "^25.3.0"
   },
   "repository": {
     "type": "git",
