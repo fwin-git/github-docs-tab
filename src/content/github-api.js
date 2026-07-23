@@ -3,6 +3,7 @@
 // are CORS-open (ACAO: *), so the content script fetches directly.
 import { ext } from '../common/browser.js';
 import { encodePath } from '../common/paths.js';
+import { toBase64Utf8 } from '../common/edit-utils.js';
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -202,6 +203,111 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     return URL.createObjectURL(await res.blob());
   }
 
+  // ---- edit / propose-change support ---------------------------------------
+
+  async function apiJson(method, url, body, { allow404 = false } = {}) {
+    const res = await fetch(`${API}${url}`, {
+      method,
+      headers: { ...apiHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    trackRate(res);
+    if (allow404 && res.status === 404) return null;
+    if (isRateLimited(res)) throw new RateLimitError(rate.resetAt);
+    if (!res.ok) {
+      let detail = '';
+      try {
+        detail = (await res.json()).message || '';
+      } catch {
+        // no JSON body
+      }
+      const err = new Error(`GitHub API ${res.status}${detail ? `: ${detail}` : ''} (${method} ${url})`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  let repoInfoCache = null;
+  async function getRepoInfo() {
+    if (!repoInfoCache) {
+      const info = await apiJson('GET', `/repos/${owner}/${repo}`);
+      repoInfoCache = {
+        defaultBranch: info.default_branch,
+        name: info.name,
+        canPush: !!(info.permissions && (info.permissions.push || info.permissions.maintain || info.permissions.admin)),
+      };
+    }
+    return repoInfoCache;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Create branch -> commit the single-file change -> open a PR against the
+  // default branch. Forks automatically when the token lacks push access.
+  async function createEditPr({ path, content, message, branch, title, body, onProgress = () => {} }) {
+    if (!token) throw new Error('A GitHub token is required (extension options).');
+    const info = await getRepoInfo();
+    const base = info.defaultBranch;
+
+    let headOwner = owner;
+    let headRepo = repo;
+    if (!info.canPush) {
+      onProgress('No push access — creating (or reusing) your fork…');
+      const fork = await apiJson('POST', `/repos/${owner}/${repo}/forks`, {});
+      headOwner = fork.owner.login;
+      headRepo = fork.name;
+      // Forking is async; wait until the fork's default branch is readable.
+      let ready = false;
+      for (let i = 0; i < 20 && !ready; i++) {
+        ready = !!(await apiJson('GET', `/repos/${headOwner}/${headRepo}/git/ref/${encodeURIComponent(`heads/${base}`)}`, null, { allow404: true }));
+        if (!ready) await sleep(1500);
+      }
+      if (!ready) throw new Error('Fork is not ready yet — please retry in a moment.');
+    }
+
+    onProgress('Creating branch…');
+    const baseRef = await apiJson('GET', `/repos/${headOwner}/${headRepo}/git/ref/${encodeURIComponent(`heads/${base}`)}`);
+    let headBranch = branch;
+    try {
+      await apiJson('POST', `/repos/${headOwner}/${headRepo}/git/refs`, {
+        ref: `refs/heads/${headBranch}`,
+        sha: baseRef.object.sha,
+      });
+    } catch (err) {
+      if (err.status !== 422) throw err; // 422: branch exists — reuse a suffixed one
+      headBranch = `${branch}-${Math.random().toString(36).slice(2, 6)}`;
+      await apiJson('POST', `/repos/${headOwner}/${headRepo}/git/refs`, {
+        ref: `refs/heads/${headBranch}`,
+        sha: baseRef.object.sha,
+      });
+    }
+
+    onProgress('Committing change…');
+    const existing = await apiJson(
+      'GET',
+      `/repos/${headOwner}/${headRepo}/contents/${encodePath(path)}?ref=${encodeURIComponent(headBranch)}`,
+      null,
+      { allow404: true }
+    );
+    await apiJson('PUT', `/repos/${headOwner}/${headRepo}/contents/${encodePath(path)}`, {
+      message,
+      content: toBase64Utf8(content),
+      branch: headBranch,
+      ...(existing && existing.sha ? { sha: existing.sha } : {}),
+    });
+
+    onProgress('Opening pull request…');
+    const pr = await apiJson('POST', `/repos/${owner}/${repo}/pulls`, {
+      title,
+      body,
+      base,
+      head: headOwner === owner ? headBranch : `${headOwner}:${headBranch}`,
+      maintainer_can_modify: true,
+    });
+    return { url: pr.html_url, number: pr.number };
+  }
+
   const rawUrl = (path) => `${RAW}/${owner}/${repo}/HEAD/${encodePath(path)}`;
   const blobUrl = (path) => `https://github.com/${owner}/${repo}/blob/HEAD/${encodePath(path)}`;
   const editUrl = (path) => `https://github.com/${owner}/${repo}/edit/HEAD/${encodePath(path)}`;
@@ -213,6 +319,8 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     getTree,
     getRawText,
     getBlobObjectURL,
+    getRepoInfo,
+    createEditPr,
     rawUrl,
     blobUrl,
     editUrl,

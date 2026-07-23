@@ -75,6 +75,16 @@ Permanent installs require a signed build: submit `artifacts/github-docs-tab-fir
 - Pin important docs to the top of the sidebar with `pinned: true` in their frontmatter.
 - The circle icon toggles auto/light/dark theme; the arrows icon refreshes the doc list; GitHub/pencil icons open or edit the current file on GitHub.
 
+## Editing documents
+
+The pencil button in the viewer's toolbar opens a **live editor**: markdown source on the left, an instantly updating preview on the right — rendered by exactly the same pipeline as the viewer (wiki links, alerts, highlighting, all of it) — plus a formatting toolbar (bold/italic/code/headings/lists/tasks/links/wiki links). It is deliberately a source editor with live preview rather than contentEditable WYSIWYG: HTML→markdown round-trips corrupt formatting and produce noisy diffs, which matters when the output becomes a commit.
+
+Saving is always an explicit, confirmed step, with three routes:
+
+1. **Propose via GitHub editor** — no token needed. Your edit is stashed locally and the extension navigates to GitHub's own file editor (`/edit/…`), where it pre-fills your changes; you review and press GitHub's native **Commit changes…** button, so the commit/branch/fork/PR flow runs entirely through GitHub's UI under your logged-in account. (The extension cannot — and should not — commit directly with your browser session: those endpoints are CSRF-protected by design.) If auto-fill fails on a GitHub editor redesign, a toast offers your edited content for one-click copy.
+2. **Create pull request…** — fully automatic, requires an API token (options) with *Contents* and *Pull requests* write permission. Creates a branch from the default branch, commits the single-file change, and opens a PR — using your fork automatically when you lack push access. You get the PR link when it's done.
+3. **Download .patch / Copy patch** — no auth at all. A standard unified diff (`git apply file.patch` or `patch -p1 < file.patch`), generated locally.
+
 ## Options
 
 Click the extension icon → **Options**:

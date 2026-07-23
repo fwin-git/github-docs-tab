@@ -1,6 +1,7 @@
 // Content-script entry: detects repo pages, injects the Docs tab, routes
 // #docs hashes to the viewer, and survives GitHub's Turbo soft navigation.
 import { parseHash } from '../common/route.js';
+import { ext } from '../common/browser.js';
 import { loadSettings, onSettingsChanged } from '../common/settings.js';
 import { makeClient } from './github-api.js';
 import { collectDocs } from '../common/docs-model.js';
@@ -217,7 +218,109 @@ onSettingsChanged((next) => {
   scheduleScan();
 });
 
+// ---- "Propose via GitHub editor" handoff ------------------------------------
+// The viewer stashes edited content and navigates to GitHub's own /edit/ page;
+// here (also github.com, so this content script runs) we pre-fill GitHub's
+// editor so the user commits with their own logged-in account.
+
+function parseEditPage(pathname) {
+  const segs = pathname.split('/').filter(Boolean);
+  if (segs.length >= 5 && segs[2] === 'edit') {
+    return { owner: segs[0], repo: segs[1], path: segs.slice(4).map(decodeURIComponent).join('/') };
+  }
+  return null;
+}
+
+function showToast(text, copyContent) {
+  document.querySelector('.gdt-toast')?.remove();
+  const toast = document.createElement('div');
+  toast.className = 'gdt-toast';
+  const span = document.createElement('span');
+  span.textContent = text;
+  toast.appendChild(span);
+  if (copyContent) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Copy edited content';
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(copyContent).then(
+        () => (btn.textContent = 'Copied ✓'),
+        () => (btn.textContent = 'Copy failed')
+      );
+    });
+    toast.appendChild(btn);
+  }
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'gdt-toast-x';
+  x.textContent = '×';
+  x.addEventListener('click', () => toast.remove());
+  toast.appendChild(x);
+  document.body.appendChild(toast);
+  if (!copyContent) setTimeout(() => toast.remove(), 20000);
+}
+
+async function maybePrefillGithubEditor() {
+  const stage = (s) => document.documentElement.setAttribute('data-gdt-prefill', s);
+  const info = parseEditPage(location.pathname);
+  if (!info) return;
+  stage('edit-page');
+  let stored;
+  try {
+    stored = (await ext.storage.local.get('gdt:pending-edit'))['gdt:pending-edit'];
+  } catch (err) {
+    stage('storage-error:' + (err && err.message));
+    return;
+  }
+  if (!stored || stored.owner !== info.owner || stored.repo !== info.repo || stored.path !== info.path) {
+    stage('no-match');
+    return;
+  }
+  stage('matched');
+  if (Date.now() - stored.savedAt > 10 * 60 * 1000) {
+    ext.storage.local.remove('gdt:pending-edit');
+    return;
+  }
+  const deadline = Date.now() + 12000;
+  const finish = (success) => {
+    ext.storage.local.remove('gdt:pending-edit');
+    showToast(
+      success
+        ? 'Docs Tab: your edited content is filled in below — review it and use "Commit changes…".'
+        : "Docs Tab: couldn't auto-fill GitHub's editor. Copy your edited content and paste it (select all first).",
+      success ? null : stored.content
+    );
+  };
+  stage('polling');
+  const timer = setInterval(() => {
+    const cm = document.querySelector('.cm-content');
+    const ta = document.querySelector('textarea[name="value"]');
+    if (ta) {
+      clearInterval(timer);
+      stage('filling-textarea');
+      ta.value = stored.content;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      finish(true);
+    } else if (cm) {
+      clearInterval(timer);
+      let ok = false;
+      try {
+        cm.focus();
+        document.execCommand('selectAll');
+        ok = document.execCommand('insertText', false, stored.content);
+      } catch {
+        ok = false;
+      }
+      finish(ok);
+    } else if (Date.now() > deadline) {
+      clearInterval(timer);
+      finish(false);
+    }
+  }, 400);
+}
+
 document.documentElement.setAttribute('data-gdt-boot', '1');
 scan().catch((err) => {
   document.documentElement.setAttribute('data-gdt-error', `boot ${err && err.name}: ${err && err.message}`.slice(0, 300));
 });
+maybePrefillGithubEditor();

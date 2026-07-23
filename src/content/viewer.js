@@ -16,6 +16,9 @@ import { resolveRelative, splitAnchor, isMarkdownPath, dirname, basename } from 
 import { buildHash } from '../common/route.js';
 import { githubSlug } from '../common/slugger.js';
 import { mdToPlainText, extractHeadings, bestHeadingTitle } from '../common/md-text.js';
+import { buildUnifiedPatch } from '../common/diff.js';
+import { defaultCommitMessage, branchNameFor, editPageUrl } from '../common/edit-utils.js';
+import { ext } from '../common/browser.js';
 import { saveSettings } from '../common/settings.js';
 import { createMarkdownIt } from './markdown.js';
 import { renderDoc } from './render-doc.js';
@@ -72,6 +75,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   let theme = settings.theme || 'auto';
   let titleMode = settings.titleMode === 'filename' ? 'filename' : 'heading';
   let treeFilter = '';
+  let editor = null; // { path, original, el, textarea, preview, status, dirty, buttons }
 
   // ---- markdown context -----------------------------------------------------
 
@@ -252,6 +256,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
                 <div class="gdt-search-results" data-gdt-results hidden></div>
               </div>
               <div class="gdt-actions">
+                <button class="gdt-iconbtn" data-gdt-live-edit type="button" title="Edit this document in the viewer" disabled>${ICONS.edit}</button>
                 <button class="gdt-iconbtn" data-gdt-theme-toggle type="button" title="Theme: auto">${ICONS.theme}</button>
                 <a class="gdt-iconbtn" data-gdt-open-gh target="_blank" rel="noopener noreferrer" title="View on GitHub">${ICONS.github}</a>
                 <a class="gdt-iconbtn" data-gdt-edit-gh target="_blank" rel="noopener noreferrer" title="Edit on GitHub">${ICONS.edit}</a>
@@ -276,6 +281,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       tree: root.querySelector('[data-gdt-tree]'),
       progress: root.querySelector('[data-gdt-progress]'),
       titleToggle: root.querySelector('[data-gdt-title-toggle]'),
+      liveEdit: root.querySelector('[data-gdt-live-edit]'),
       crumbs: root.querySelector('[data-gdt-crumbs]'),
       searchInput: root.querySelector('[data-gdt-search]'),
       results: root.querySelector('[data-gdt-results]'),
@@ -319,6 +325,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       root.classList.toggle('gdt-side-open');
     });
     refs.themeToggle.addEventListener('click', cycleTheme);
+    refs.liveEdit.addEventListener('click', () => {
+      if (currentPath) openEditor(currentPath);
+    });
 
     let filterTimer = 0;
     refs.filter.addEventListener('input', () => {
@@ -412,6 +421,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
   function close() {
     if (!mounted) return;
+    if (editor) closeEditor(true);
     mounted = false;
     document.removeEventListener('keydown', keydownHandler, true);
     if (tocObserver) {
@@ -662,6 +672,13 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
   async function renderRoute(route) {
     const target = route.path ?? defaultPath();
+    if (editor) {
+      if (target === editor.path) return; // stay in the editor
+      if (!closeEditor(false)) {
+        location.hash = buildHash({ path: editor.path });
+        return;
+      }
+    }
     if (!target) {
       renderMessage('No documentation found', 'This repository has no markdown documents in its docs folders.');
       return;
@@ -716,6 +733,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     document.title = `${title} · Docs · ${client.owner}/${client.repo}`;
     refs.editGh.href = client.editUrl(path);
     refs.openGh.href = client.blobUrl(path);
+    refs.liveEdit.disabled = false;
 
     refs.article.textContent = '';
     const header = buildArticleHeader(path, m, doc, rd);
@@ -954,6 +972,298 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       renderArticle(p, null);
     });
     box.appendChild(retry);
+  }
+
+  // ---- live editor ----------------------------------------------------------
+
+  async function openEditor(path) {
+    let source = contentCache.get(path);
+    if (source == null) {
+      try {
+        source = await client.getRawText(path);
+        contentCache.set(path, source);
+      } catch (err) {
+        renderError(path, err);
+        return;
+      }
+    }
+    if (editor && !closeEditor(false)) return;
+    if (tocObserver) {
+      tocObserver.disconnect();
+      tocObserver = null;
+    }
+    refs.toc.hidden = true;
+    refs.article.textContent = '';
+    buildEditor(path, source);
+    updateEditorState(true);
+  }
+
+  function closeEditor(silent) {
+    if (!editor) return true;
+    if (!silent && editor.dirty && !window.confirm('Discard your unsaved edits?')) return false;
+    const path = editor.path;
+    editor.el.remove();
+    editor = null;
+    if (!silent && mounted) {
+      currentPath = null; // force re-render of the article
+      renderArticle(path, null);
+    }
+    return true;
+  }
+
+  function buildEditor(path, source) {
+    const el = h(`
+      <div class="gdt-editor">
+        <div class="gdt-ed-toolbar" data-ed-toolbar>
+          <span class="gdt-ed-file">${md.utils.escapeHtml(path)}</span>
+        </div>
+        <div class="gdt-ed-split">
+          <textarea class="gdt-ed-source" spellcheck="false" aria-label="Markdown source"></textarea>
+          <div class="gdt-ed-preview"><article class="gdt-md" data-ed-preview></article></div>
+        </div>
+        <div class="gdt-ed-footer">
+          <span class="gdt-ed-status" data-ed-status></span>
+          <span class="gdt-ed-actions">
+            <button type="button" class="gdt-btn" data-ed-cancel>Cancel</button>
+            <button type="button" class="gdt-btn" data-ed-copy-patch>Copy patch</button>
+            <button type="button" class="gdt-btn" data-ed-download>Download .patch</button>
+            <button type="button" class="gdt-btn" data-ed-github title="Opens GitHub's own editor pre-filled with your changes — commit with your logged-in account">Propose via GitHub editor</button>
+            <button type="button" class="gdt-btn gdt-btn-primary" data-ed-pr>Create pull request…</button>
+          </span>
+        </div>
+      </div>
+    `);
+    const textarea = el.querySelector('.gdt-ed-source');
+    textarea.value = source;
+    editor = {
+      path,
+      original: source,
+      el,
+      textarea,
+      preview: el.querySelector('[data-ed-preview]'),
+      status: el.querySelector('[data-ed-status]'),
+      dirty: false,
+      buttons: ['[data-ed-copy-patch]', '[data-ed-download]', '[data-ed-github]', '[data-ed-pr]'].map((sel) =>
+        el.querySelector(sel)
+      ),
+    };
+
+    const TOOLS = [
+      ['B', 'Bold', () => wrapSelection('**')],
+      ['I', 'Italic', () => wrapSelection('_')],
+      ['S̶', 'Strikethrough', () => wrapSelection('~~')],
+      ['<>', 'Inline code', () => wrapSelection('`')],
+      ['H2', 'Heading', () => prefixLines('## ')],
+      ['•', 'List item', () => prefixLines('- ')],
+      ['☑', 'Task item', () => prefixLines('- [ ] ')],
+      ['❝', 'Quote', () => prefixLines('> ')],
+      ['🔗', 'Link', () => insertAtSelection('[', '](https://)')],
+      ['[[ ]]', 'Wiki link', () => insertAtSelection('[[', ']]')],
+    ];
+    const toolbar = el.querySelector('[data-ed-toolbar]');
+    for (const [label, title, run] of TOOLS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'gdt-ed-btn';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', () => {
+        run();
+        textarea.focus();
+        onEdited();
+      });
+      toolbar.appendChild(b);
+    }
+
+    let previewTimer = 0;
+    const onEdited = () => {
+      updateEditorState(false);
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(() => updateEditorState(true), 250);
+    };
+    textarea.addEventListener('input', onEdited);
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        insertAtSelection('  ', '');
+        onEdited();
+      }
+    });
+
+    el.querySelector('[data-ed-cancel]').addEventListener('click', () => closeEditor(false));
+    el.querySelector('[data-ed-download]').addEventListener('click', downloadPatch);
+    el.querySelector('[data-ed-copy-patch]').addEventListener('click', copyPatch);
+    el.querySelector('[data-ed-github]').addEventListener('click', proposeViaGitHub);
+    el.querySelector('[data-ed-pr]').addEventListener('click', () => openPrModal());
+    refs.article.appendChild(el);
+    textarea.focus();
+  }
+
+  function updateEditorState(renderPreview) {
+    if (!editor) return;
+    const val = editor.textarea.value;
+    editor.dirty = val !== editor.original;
+    editor.status.textContent = editor.dirty ? 'Unsaved changes' : 'No changes yet';
+    for (const b of editor.buttons) b.disabled = !editor.dirty;
+    if (renderPreview) {
+      try {
+        const rd = renderDoc(md, val, { path: editor.path, ctx });
+        editor.preview.textContent = '';
+        editor.preview.appendChild(rd.fragment);
+      } catch (err) {
+        editor.preview.textContent = `Preview error: ${(err && err.message) || err}`;
+      }
+    }
+  }
+
+  function wrapSelection(marker) {
+    const ta = editor.textarea;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const inner = value.slice(s, e) || 'text';
+    ta.value = value.slice(0, s) + marker + inner + marker + value.slice(e);
+    ta.setSelectionRange(s + marker.length, s + marker.length + inner.length);
+  }
+
+  function insertAtSelection(before, after) {
+    const ta = editor.textarea;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const inner = value.slice(s, e);
+    ta.value = value.slice(0, s) + before + inner + after + value.slice(e);
+    const pos = s + before.length + inner.length;
+    ta.setSelectionRange(pos, pos);
+  }
+
+  function prefixLines(prefix) {
+    const ta = editor.textarea;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const lineStart = value.lastIndexOf('\n', s - 1) + 1;
+    const lineEnd = value.indexOf('\n', e) === -1 ? value.length : value.indexOf('\n', e);
+    const block = value.slice(lineStart, lineEnd);
+    const prefixed = block
+      .split('\n')
+      .map((l) => (l.startsWith(prefix) ? l.slice(prefix.length) : prefix + l))
+      .join('\n');
+    ta.value = value.slice(0, lineStart) + prefixed + value.slice(lineEnd);
+    ta.setSelectionRange(lineStart, lineStart + prefixed.length);
+  }
+
+  function currentPatch() {
+    return buildUnifiedPatch(editor.path, editor.original, editor.textarea.value);
+  }
+
+  function downloadPatch() {
+    const patch = currentPatch();
+    if (!patch) return;
+    const url = URL.createObjectURL(new Blob([patch], { type: 'text/x-patch' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${basename(editor.path)}.patch`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    editor.status.textContent = `Patch downloaded — apply with: git apply ${basename(editor.path)}.patch`;
+  }
+
+  function copyPatch() {
+    const patch = currentPatch();
+    if (!patch) return;
+    navigator.clipboard
+      .writeText(patch)
+      .then(() => (editor.status.textContent = 'Patch copied to clipboard'))
+      .catch(() => (editor.status.textContent = 'Clipboard unavailable — use Download instead'));
+  }
+
+  async function proposeViaGitHub() {
+    const path = editor.path;
+    const content = editor.textarea.value;
+    try {
+      await ext.storage.local.set({
+        'gdt:pending-edit': { owner: client.owner, repo: client.repo, path, content, savedAt: Date.now() },
+      });
+    } catch {
+      editor.status.textContent = 'Could not stash the edit — try Download .patch instead.';
+      return;
+    }
+    let branch = 'main';
+    try {
+      branch = (await client.getRepoInfo()).defaultBranch;
+    } catch {
+      // default guess is fine; GitHub will 404 visibly if wrong
+    }
+    editor.dirty = false; // handing off — do not block navigation with a confirm
+    location.href = editPageUrl(client.owner, client.repo, branch, path);
+  }
+
+  function openPrModal() {
+    const path = editor.path;
+    const backdrop = h(`
+      <div class="gdt-modal-backdrop">
+        <div class="gdt-modal" role="dialog" aria-label="Create pull request">
+          <h3>Propose change as pull request</h3>
+          <label>Commit message <input data-pr-msg autocomplete="off" spellcheck="false" /></label>
+          <label>Branch name <input data-pr-branch autocomplete="off" spellcheck="false" /></label>
+          <label>Pull request title <input data-pr-title autocomplete="off" /></label>
+          <label>Description <textarea data-pr-body rows="3"></textarea></label>
+          <p class="gdt-modal-note" data-pr-note></p>
+          <div class="gdt-modal-actions">
+            <button type="button" class="gdt-btn" data-pr-cancel>Cancel</button>
+            <button type="button" class="gdt-btn gdt-btn-primary" data-pr-go>Create pull request</button>
+          </div>
+          <p class="gdt-modal-progress" data-pr-progress hidden aria-live="polite"></p>
+        </div>
+      </div>
+    `);
+    const q = (sel) => backdrop.querySelector(sel);
+    const msg = defaultCommitMessage(path);
+    q('[data-pr-msg]').value = msg;
+    q('[data-pr-branch]').value = branchNameFor(path, Math.random().toString(36).slice(2, 8));
+    q('[data-pr-title]').value = msg;
+    q('[data-pr-body]').value = 'Proposed from the GitHub Docs Tab extension.';
+    if (!client.hasToken) {
+      q('[data-pr-note]').textContent =
+        'A GitHub token with Contents and Pull requests (write) permission is required — add one in the extension options, or use "Propose via GitHub editor" instead.';
+      q('[data-pr-go]').disabled = true;
+    } else {
+      q('[data-pr-note]').textContent =
+        'Creates a branch and a single-file commit, then opens a pull request. Your fork is used automatically if you lack push access.';
+    }
+    const closeModal = () => backdrop.remove();
+    q('[data-pr-cancel]').addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal();
+    });
+    q('[data-pr-go]').addEventListener('click', async () => {
+      const progress = q('[data-pr-progress]');
+      progress.hidden = false;
+      q('[data-pr-go]').disabled = true;
+      q('[data-pr-cancel]').disabled = true;
+      try {
+        const result = await client.createEditPr({
+          path,
+          content: editor.textarea.value,
+          message: q('[data-pr-msg]').value.trim() || msg,
+          branch: q('[data-pr-branch]').value.trim() || branchNameFor(path, Math.random().toString(36).slice(2, 8)),
+          title: q('[data-pr-title]').value.trim() || msg,
+          body: q('[data-pr-body]').value,
+          onProgress: (t) => (progress.textContent = t),
+        });
+        editor.original = editor.textarea.value; // committed — no longer dirty
+        updateEditorState(false);
+        const panel = q('.gdt-modal');
+        panel.textContent = '';
+        const done = h(
+          `<div><h3>Pull request created</h3><p><a class="gdt-btn gdt-btn-primary" target="_blank" rel="noopener noreferrer" href="${result.url}">Open pull request #${result.number} ↗</a></p><p><button type="button" class="gdt-btn" data-pr-close>Close</button></p></div>`
+        );
+        panel.appendChild(done);
+        panel.querySelector('[data-pr-close]').addEventListener('click', closeModal);
+      } catch (err) {
+        progress.textContent = `Failed: ${(err && err.message) || err}`;
+        q('[data-pr-go]').disabled = false;
+        q('[data-pr-cancel]').disabled = false;
+      }
+    });
+    root.appendChild(backdrop);
   }
 
   // ---- public ---------------------------------------------------------------

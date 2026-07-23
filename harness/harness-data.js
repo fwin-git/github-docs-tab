@@ -117,7 +117,13 @@ Makes a widget.
   entries.push({ path: 'src/main.js', type: 'blob', sha: 'blob-src', size: 10 });
 
   // ---- chrome.storage shim --------------------------------------------------
-  const store = new Map();
+  // Backed by localStorage so state survives page navigations (needed for the
+  // "Propose via GitHub editor" handoff, which crosses a page load).
+  const store = new Map(JSON.parse(localStorage.getItem('gdt-harness-store') || '[]'));
+  const persist = () => localStorage.setItem('gdt-harness-store', JSON.stringify([...store.entries()]));
+  // Seed a token so the propose-PR flow (and token-mode content fetching via
+  // the contents API) can be exercised against the stubbed endpoints below.
+  if (!store.has('gdt:settings')) store.set('gdt:settings', { token: 'harness-token' });
   const storageArea = {
     async get(keys) {
       const out = {};
@@ -127,9 +133,11 @@ Makes a widget.
     },
     async set(obj) {
       for (const [k, v] of Object.entries(obj)) store.set(k, v);
+      persist();
     },
     async remove(keys) {
       for (const k of Array.isArray(keys) ? keys : [keys]) store.delete(k);
+      persist();
     },
   };
   window.chrome = {
@@ -140,15 +148,18 @@ Makes a widget.
   // ---- fetch stub -----------------------------------------------------------
   const realFetch = window.fetch.bind(window);
   window.__gdtHarness = { requests: [] };
+  const json = (obj, status = 200, headers = {}) =>
+    new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...headers } });
+
   window.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input.url;
-    window.__gdtHarness.requests.push(url);
+    const method = ((init && init.method) || (typeof input !== 'string' && input.method) || 'GET').toUpperCase();
+    const accept = ((init && init.headers && init.headers.Accept) || '').toString();
+    window.__gdtHarness.requests.push(`${method} ${url}`);
+
     let m = /^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/git\/trees\/HEAD\?recursive=1$/.exec(url);
     if (m) {
-      return new Response(JSON.stringify({ sha: 'root-tree-sha', truncated: false, tree: entries }), {
-        status: 200,
-        headers: { 'content-type': 'application/json', etag: 'W/"fixture"' },
-      });
+      return json({ sha: 'root-tree-sha', truncated: false, tree: entries }, 200, { etag: 'W/"fixture"' });
     }
     m = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/HEAD\/(.+)$/.exec(url);
     if (m) {
@@ -157,9 +168,49 @@ Makes a widget.
       if (path.endsWith('.png')) return new Response(new Blob([new Uint8Array(0)]), { status: 200 });
       return new Response('nope', { status: 404 });
     }
+
+    // ---- token-mode + propose-PR endpoints ----------------------------------
+    m = /^https:\/\/api\.github\.com\/repos\/acme\/widget\/contents\/([^?]+)\?ref=([^&]+)$/.exec(url);
+    if (m && method === 'GET') {
+      const path = m[1].split('/').map(decodeURIComponent).join('/');
+      if (accept.includes('raw')) {
+        return path in FILES ? new Response(FILES[path], { status: 200 }) : new Response('nope', { status: 404 });
+      }
+      return path in FILES ? json({ sha: 'blob-' + path, path }) : json({ message: 'Not Found' }, 404);
+    }
+    if (url === 'https://api.github.com/repos/acme/widget' && method === 'GET') {
+      return json({ name: 'widget', default_branch: 'main', permissions: { push: true } });
+    }
+    if (url === 'https://api.github.com/repos/acme/widget/git/ref/heads%2Fmain' && method === 'GET') {
+      return json({ object: { sha: 'base-sha' } });
+    }
+    if (url === 'https://api.github.com/repos/acme/widget/git/refs' && method === 'POST') {
+      return json({ ref: JSON.parse(init.body).ref }, 201);
+    }
+    m = /^https:\/\/api\.github\.com\/repos\/acme\/widget\/contents\/([^?]+)$/.exec(url);
+    if (m && method === 'PUT') {
+      window.__gdtHarness.lastPut = JSON.parse(init.body);
+      return json({ commit: { sha: 'new-commit' } });
+    }
+    if (url === 'https://api.github.com/repos/acme/widget/pulls' && method === 'POST') {
+      window.__gdtHarness.lastPull = JSON.parse(init.body);
+      return json({ html_url: 'https://github.com/acme/widget/pull/42', number: 42 }, 201);
+    }
+
     if (url.startsWith('https://api.github.com/') || url.startsWith('https://raw.githubusercontent.com/')) {
-      return new Response('unexpected', { status: 404 });
+      return json({ message: 'unexpected ' + method + ' ' + url }, 404);
     }
     return realFetch(input, init);
   };
+
+  // ---- fake GitHub file editor ---------------------------------------------
+  // On /owner/repo/edit/... URLs, provide the textarea GitHub's editor exposes
+  // so the "Propose via GitHub editor" handoff can be exercised end to end.
+  if (/^\/[^/]+\/[^/]+\/edit\//.test(location.pathname)) {
+    const ta = document.createElement('textarea');
+    ta.name = 'value';
+    ta.setAttribute('data-harness-editor', '');
+    ta.style.cssText = 'display:block;width:90%;height:120px;margin:12px';
+    document.body.appendChild(ta);
+  }
 })();

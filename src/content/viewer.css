@@ -1243,3 +1243,230 @@
   display: inline-flex;
   gap: 2px;
 }
+
+/* ---- live editor ---------------------------------------------------------- */
+
+#gdt-root .gdt-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#gdt-root .gdt-ed-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--gdt-border);
+  border-radius: 8px;
+  background: var(--gdt-bg-muted);
+}
+
+#gdt-root .gdt-ed-file {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#gdt-root .gdt-ed-btn {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--gdt-border);
+  border-radius: 6px;
+  background: var(--gdt-bg);
+  color: var(--gdt-fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#gdt-root .gdt-ed-btn:hover {
+  border-color: var(--gdt-accent);
+  color: var(--gdt-accent);
+}
+
+#gdt-root .gdt-ed-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+#gdt-root .gdt-ed-source {
+  width: 100%;
+  min-height: 65vh;
+  resize: vertical;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--gdt-fg);
+  background: var(--gdt-bg);
+  border: 1px solid var(--gdt-border);
+  border-radius: 8px;
+  outline: none;
+  box-sizing: border-box;
+  tab-size: 2;
+}
+
+#gdt-root .gdt-ed-source:focus {
+  border-color: var(--gdt-accent);
+  box-shadow: 0 0 0 3px var(--gdt-accent-bg);
+}
+
+#gdt-root .gdt-ed-preview {
+  border: 1px dashed var(--gdt-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-y: auto;
+  max-height: 75vh;
+}
+
+#gdt-root .gdt-ed-preview a {
+  pointer-events: none; /* preview navigation would lose the edit session */
+}
+
+#gdt-root .gdt-ed-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#gdt-root .gdt-ed-status {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+}
+
+#gdt-root .gdt-ed-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#gdt-root .gdt-btn-primary {
+  background: var(--gdt-success);
+  border-color: var(--gdt-success);
+  color: #ffffff;
+}
+
+#gdt-root .gdt-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 1012px) {
+  #gdt-root .gdt-ed-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- modal ---------------------------------------------------------------- */
+
+#gdt-root .gdt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#gdt-root .gdt-modal {
+  width: min(520px, 92vw);
+  background: var(--gdt-bg);
+  border: 1px solid var(--gdt-border);
+  border-radius: 10px;
+  box-shadow: var(--gdt-shadow);
+  padding: 20px;
+}
+
+#gdt-root .gdt-modal h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+#gdt-root .gdt-modal label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gdt-fg-muted);
+  margin-bottom: 10px;
+}
+
+#gdt-root .gdt-modal input,
+#gdt-root .gdt-modal textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--gdt-fg);
+  background: var(--gdt-bg-muted);
+  border: 1px solid var(--gdt-border);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+#gdt-root .gdt-modal-note {
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+  margin: 4px 0 12px;
+}
+
+#gdt-root .gdt-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#gdt-root .gdt-modal-progress {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--gdt-fg-muted);
+}
+
+/* ---- toast (GitHub editor handoff) ---------------------------------------- */
+
+.gdt-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, 90vw);
+  padding: 12px 14px;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #f0f6fc;
+  background: #1c2128;
+  border: 1px solid #3d444d;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(1, 4, 9, 0.6);
+}
+
+.gdt-toast button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid #3d444d;
+  border-radius: 6px;
+  background: #2a313a;
+  color: #f0f6fc;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gdt-toast .gdt-toast-x {
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  padding: 0 2px;
+}
