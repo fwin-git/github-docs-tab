@@ -265,6 +265,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
             <div class="gdt-truncated" data-gdt-truncated hidden></div>
             <div class="gdt-orgbar" data-gdt-orgbar hidden>
               <span data-gdt-orgbar-label></span>
+              <button type="button" class="gdt-iconbtn gdt-orgbar-btn" data-gdt-orgbar-reindex title="Index all repositories for search">${ICONS.refresh}</button>
               <button type="button" class="gdt-draft-x" data-gdt-orgbar-close title="Back to this repository only">×</button>
             </div>
             <input class="gdt-filter-input" data-gdt-filter type="search" placeholder="Filter files…" autocomplete="off" spellcheck="false" aria-label="Filter file tree" />
@@ -397,6 +398,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       refs.orgBar.hidden = true;
       clearOrgSnapshot(client.owner);
       renderTree();
+    });
+    root.querySelector('[data-gdt-orgbar-reindex]').addEventListener('click', () => {
+      if (orgSession) runOrgIndex([...orgSession.repoDocs.keys()]);
     });
     root.querySelector('[data-gdt-publish-session]').addEventListener('click', openSessionModal);
     root.querySelector('[data-gdt-discard-session]').addEventListener('click', async () => {
@@ -679,15 +683,15 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     treeEl.textContent = '';
     orgSession.ringEls = new Map();
     refs.orgBar.hidden = false;
-    const base = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
-    refs.orgBarLabel.textContent = orgSession.indexing ? `${base} · indexing search ${orgSession.indexPct || 0}%` : base;
+    updateOrgBarLabel();
     const repos = [...orgSession.repoDocs.keys()].sort((a, b) =>
       a === client.repo ? -1 : b === client.repo ? 1 : a.localeCompare(b)
     );
     for (const repo of repos) {
       const docsOfRepo = orgSession.repoDocs.get(repo) || [];
+      const repoIndexed = (orgSession.repoState.get(repo) || {}).phase === 'done';
       const group = document.createElement('div');
-      group.className = 'gdt-org-group';
+      group.className = 'gdt-org-group' + (repoIndexed ? '' : ' gdt-org-unindexed');
       const head = document.createElement('button');
       head.type = 'button';
       head.className = 'gdt-dir gdt-org-repo' + (orgExpanded.has(repo) ? ' gdt-open' : '');
@@ -704,16 +708,35 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       orgSession.ringEls.set(repo, ring);
       paintRing(repo);
       const isCurrent = repo === client.repo;
-      const body = isCurrent
+      const body = document.createElement('div');
+      // Prompt shown when expanding an unindexed, non-current repo.
+      const maybePrompt = () => {
+        if (isCurrent || repoIndexed || orgSession.browseAck.has(repo)) return;
+        if (body.querySelector('.gdt-org-prompt')) return;
+        const prompt = h(`<div class="gdt-org-prompt"><span>Index <b>${md.utils.escapeHtml(repo)}</b> so it appears in search?</span><span class="gdt-org-prompt-btns"><button type="button" class="gdt-btn gdt-btn-sm gdt-btn-primary" data-p-index>Index</button><button type="button" class="gdt-btn gdt-btn-sm" data-p-browse>Just browse</button></span></div>`);
+        prompt.querySelector('[data-p-index]').addEventListener('click', () => {
+          prompt.remove();
+          runOrgIndex([repo]);
+        });
+        prompt.querySelector('[data-p-browse]').addEventListener('click', () => {
+          orgSession.browseAck.add(repo);
+          prompt.remove();
+        });
+        body.insertBefore(prompt, body.firstChild);
+      };
+      const filesEl = isCurrent
         ? renderNodes(tree, 0)
         : renderNodes(sortTree(buildTree(docsOfRepo), new Map()), 0, `/${client.owner}/${repo}`);
+      body.appendChild(filesEl);
       body.hidden = !orgExpanded.has(repo);
+      if (orgExpanded.has(repo)) maybePrompt();
       head.addEventListener('click', () => {
         if (orgExpanded.has(repo)) orgExpanded.delete(repo);
         else orgExpanded.add(repo);
         const open = orgExpanded.has(repo);
         head.classList.toggle('gdt-open', open);
         body.hidden = !open;
+        if (open) maybePrompt();
       });
       group.appendChild(head);
       group.appendChild(body);
@@ -906,6 +929,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     await Promise.all(Array.from({ length: 6 }, worker));
     indexState.finished = true;
     refs.progress.hidden = true;
+    if (orgSession) foldCurrentRepoIntoOrg();
     sortTree(tree, displayMeta());
     flat = flattenTree(tree);
     if (mounted) {
@@ -1223,7 +1247,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
         for (const docsOfRepo of result.repoDocs.values()) totalDocs += docsOfRepo.length;
         const repoState = new Map();
         for (const repo of result.repoDocs.keys()) repoState.set(repo, modalState.get(repo) || { phase: 'done' });
-        orgSession = { org: client.owner, ...result, totalDocs, indexing: false, repoState };
+        orgSession = { org: client.owner, ...result, totalDocs, indexing: false, repoState, browseAck: new Set() };
         saveOrgSnapshot(client.owner, result.repoDocs);
         renderTree();
         if (result.errors.length) {
@@ -1921,6 +1945,10 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
 
   // Auto-restore org mode from the persisted snapshot: grouped sidebar comes
   // back instantly; the search index rebuilds in the background.
+  // Restore the grouped sidebar from the cached snapshot only. Content is NOT
+  // fetched automatically (that would be dozens of requests on every page
+  // load) — repos show as available-but-unindexed until the user indexes them
+  // via the re-index button or by expanding a repo and confirming.
   let orgRestoreTried = false;
   async function maybeRestoreOrg() {
     if (orgRestoreTried || orgSession) return;
@@ -1938,35 +1966,73 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       repoDocs: snap,
       errors: [],
       totalDocs,
-      indexing: true,
-      indexPct: 0,
+      indexing: false,
       repoState,
+      browseAck: new Set(),
     };
     renderTree();
+    foldCurrentRepoIntoOrg(); // free: current repo's content is already fetched
+  }
+
+  // Fold the current repo's already-indexed content into the org index at no
+  // request cost (reuses the single-repo ContentIndex entries via contentCache).
+  function foldCurrentRepoIntoOrg() {
+    if (!orgSession || !indexState.finished) return;
+    const st = orgSession.repoState.get(client.repo);
+    if (st && st.phase === 'done') return;
+    for (const doc of docs) {
+      const source = contentCache.get(doc.path);
+      if (source == null) continue;
+      const { data, content } = parseFrontmatter(source);
+      orgSession.index.add(`${client.repo}${ORG_SEP}${doc.path}`, {
+        text: mdToPlainText(content),
+        title: displayTitle(doc.path),
+        headings: extractHeadings(content),
+        tags: (metaByPath.get(doc.path) || {}).tags || [],
+      });
+    }
+    setRepoState(client.repo, { phase: 'done' });
+  }
+
+  // Fetch + index a set of repos, updating their rings live. Used by the
+  // re-index button (all repos) and the per-repo expand confirmation.
+  async function runOrgIndex(repoNames) {
+    if (!orgSession || !repoNames.length) return;
+    const subset = new Map();
+    for (const repo of repoNames) subset.set(repo, orgSession.repoDocs.get(repo) || []);
+    orgSession.indexing = true;
+    updateOrgBarLabel();
     try {
-      let filesSeen = 0;
-      const idx = await indexOrgContent({
+      await indexOrgContent({
         owner: client.owner,
-        repoDocs: snap,
+        repoDocs: subset,
         settings,
         onProgress: (ev) => {
           if (!orgSession) return;
           const frac = ev.filesTotal ? ev.filesDone / ev.filesTotal : 1;
           setRepoState(ev.repo, { phase: ev.filesDone >= ev.filesTotal ? 'done' : 'indexing', pct: Math.round(frac * 100) });
-          orgSession.indexPct = Math.round(((ev.index - 1 + frac) / ev.total) * 100);
-          if (orgSession.indexing && refs.orgBar && !refs.orgBar.hidden) {
-            const base = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
-            refs.orgBarLabel.textContent = `${base} · indexing search ${orgSession.indexPct}%`;
-          }
         },
+        // merge into the existing org index rather than replacing it
+      }).then((idx) => {
+        if (!orgSession) return;
+        orgSession.index.merge(idx);
       });
-      if (!orgSession) return; // user left org mode meanwhile
-      orgSession.index = idx;
-      orgSession.indexing = false;
-      renderTree();
     } catch {
-      if (orgSession) orgSession.indexing = false;
+      // per-repo errors already surface via ring state
+    } finally {
+      if (orgSession) {
+        orgSession.indexing = false;
+        updateOrgBarLabel();
+      }
     }
+  }
+
+  function updateOrgBarLabel() {
+    if (!orgSession || !refs.orgBar || refs.orgBar.hidden) return;
+    const indexed = [...orgSession.repoState.values()].filter((s) => s.phase === 'done').length;
+    refs.orgBarLabel.textContent =
+      `${client.owner}: ${orgSession.repoDocs.size} repos · ${indexed}/${orgSession.repoDocs.size} indexed` +
+      (orgSession.indexing ? ' · indexing…' : '');
   }
 
   // ---- public ---------------------------------------------------------------

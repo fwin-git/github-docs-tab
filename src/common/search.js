@@ -87,6 +87,13 @@ export class ContentIndex {
     this.#entries.delete(path);
   }
 
+  // Fold another index's entries into this one (later entries win on collision).
+  merge(other) {
+    if (!other || !(other instanceof ContentIndex)) return this;
+    for (const [path, entry] of other.#entries) this.#entries.set(path, entry);
+    return this;
+  }
+
   allTags() {
     const m = new Map();
     for (const e of this.#entries.values()) {

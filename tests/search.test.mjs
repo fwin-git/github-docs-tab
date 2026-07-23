@@ -139,6 +139,18 @@ test('heading matches expose the matched heading text', () => {
   assert.equal(body[0].matchedHeading, null);
 });
 
+test('merge() folds another index in, keeping both sets searchable', () => {
+  const a = new ContentIndex();
+  a.add('r1 doc.md', { title: 'Alpha', text: 'alpha content', headings: [], tags: ['x'] });
+  const b = new ContentIndex();
+  b.add('r2 other.md', { title: 'Beta', text: 'beta zorblax content', headings: [], tags: ['y'] });
+  a.merge(b);
+  assert.equal(a.size, 2);
+  assert.equal(a.search(parseQuery('zorblax'), { limit: 5 })[0].path, 'r2 other.md');
+  assert.equal(a.search(parseQuery('alpha'), { limit: 5 })[0].path, 'r1 doc.md');
+  assert.equal(a.allTags().get('y'), 1);
+});
+
 test('allTags aggregates counts; remove() drops entries', () => {
   const idx = makeIndex();
   assert.equal(idx.allTags().get('setup'), 1);

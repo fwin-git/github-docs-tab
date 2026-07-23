@@ -1863,3 +1863,42 @@
 #gdt-root .gdt-org-ring.gdt-ring-err::after {
   content: '!';
 }
+
+/* ---- org: unindexed (available) state + expand prompt --------------------- */
+
+#gdt-root .gdt-org-unindexed > .gdt-org-repo {
+  opacity: 0.6;
+}
+
+#gdt-root .gdt-org-unindexed > .gdt-org-repo:hover {
+  opacity: 1;
+}
+
+#gdt-root .gdt-orgbar-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--gdt-accent);
+}
+
+#gdt-root .gdt-orgbar-btn:hover {
+  background: var(--gdt-bg);
+}
+
+#gdt-root .gdt-org-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 6px 6px 20px;
+  padding: 8px 10px;
+  border: 1px solid var(--gdt-border);
+  border-radius: 6px;
+  background: var(--gdt-bg-muted);
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+}
+
+#gdt-root .gdt-org-prompt-btns {
+  display: flex;
+  gap: 6px;
+}
