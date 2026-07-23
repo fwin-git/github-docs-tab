@@ -1582,25 +1582,33 @@
 
 /* ---- organization mode ---------------------------------------------------- */
 
-#gdt-root .gdt-orgbar {
+#gdt-root .gdt-org-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
-  margin-bottom: 8px;
-  border: 1px solid var(--gdt-accent);
-  background: var(--gdt-accent-bg);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 0 4px 6px;
   color: var(--gdt-accent);
+  font-size: 15px;
+  font-weight: 600;
 }
 
-#gdt-root .gdt-orgbar span {
+#gdt-root .gdt-org-title svg {
+  flex: none;
+}
+
+#gdt-root .gdt-org-title-name {
   margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#gdt-root .gdt-org-title .gdt-draft-x {
+  color: var(--gdt-fg-muted);
+}
+
+#gdt-root .gdt-org-title .gdt-draft-x:hover {
+  color: var(--gdt-danger);
 }
 
 #gdt-root .gdt-org-group {

@@ -255,6 +255,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       <div id="gdt-root" data-gdt-theme="${theme}">
         <div class="gdt-shell">
           <aside class="gdt-sidebar" data-gdt-sidebar>
+            <div class="gdt-org-title" data-gdt-org-title hidden>
+              ${ICONS.org}
+              <span class="gdt-org-title-name" data-gdt-org-title-name></span>
+              <button type="button" class="gdt-draft-x" data-gdt-org-exit title="Leave organization mode">×</button>
+            </div>
             <div class="gdt-side-head">
               <span class="gdt-doc-count" data-gdt-count-label></span>
               <span class="gdt-side-actions">
@@ -264,11 +269,6 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
               </span>
             </div>
             <div class="gdt-truncated" data-gdt-truncated hidden></div>
-            <div class="gdt-orgbar" data-gdt-orgbar hidden>
-              <span data-gdt-orgbar-label></span>
-              <button type="button" class="gdt-iconbtn gdt-orgbar-btn" data-gdt-orgbar-reindex title="Index all repositories for search">${ICONS.refresh}</button>
-              <button type="button" class="gdt-draft-x" data-gdt-orgbar-close title="Back to this repository only">×</button>
-            </div>
             <input class="gdt-filter-input" data-gdt-filter type="search" placeholder="Filter files…" autocomplete="off" spellcheck="false" aria-label="Filter file tree" />
             <div class="gdt-tags" data-gdt-tags hidden></div>
             <div class="gdt-pinned" data-gdt-pinned hidden>
@@ -320,8 +320,8 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       tags: root.querySelector('[data-gdt-tags]'),
       pinned: root.querySelector('[data-gdt-pinned]'),
       pinnedList: root.querySelector('[data-gdt-pinned-list]'),
-      orgBar: root.querySelector('[data-gdt-orgbar]'),
-      orgBarLabel: root.querySelector('[data-gdt-orgbar-label]'),
+      orgTitle: root.querySelector('[data-gdt-org-title]'),
+      orgTitleName: root.querySelector('[data-gdt-org-title-name]'),
       draftsBox: root.querySelector('[data-gdt-drafts]'),
       draftsList: root.querySelector('[data-gdt-drafts-list]'),
       draftsCount: root.querySelector('[data-gdt-drafts-count]'),
@@ -373,7 +373,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     });
 
     root.querySelector('[data-gdt-refresh]').addEventListener('click', () => {
-      if (onRequestRefresh) onRequestRefresh();
+      // In organization mode the refresh button re-opens the repo picker so
+      // you can change the selection and re-index; otherwise it refreshes the
+      // current repo's document listing.
+      if (orgSession) openOrgModal();
+      else if (onRequestRefresh) onRequestRefresh();
     });
     updateTitleToggle();
     refs.titleToggle.addEventListener('click', () => {
@@ -394,14 +398,10 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     });
     refs.themeToggle.addEventListener('click', cycleTheme);
     root.querySelector('[data-gdt-org]').addEventListener('click', openOrgModal);
-    root.querySelector('[data-gdt-orgbar-close]').addEventListener('click', () => {
+    root.querySelector('[data-gdt-org-exit]').addEventListener('click', () => {
       orgSession = null;
-      refs.orgBar.hidden = true;
       clearOrgSnapshot(client.owner);
       renderTree();
-    });
-    root.querySelector('[data-gdt-orgbar-reindex]').addEventListener('click', () => {
-      if (orgSession) runOrgIndex([...orgSession.repoDocs.keys()]);
     });
     root.querySelector('[data-gdt-publish-session]').addEventListener('click', openSessionModal);
     root.querySelector('[data-gdt-discard-session]').addEventListener('click', async () => {
@@ -598,15 +598,23 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   // ---- sidebar --------------------------------------------------------------
 
   function updateSidebarMeta() {
-    // In org mode the header counts every document across all repos in the
-    // session; otherwise it counts the current repo.
+    // In org mode: org name as a title line, and the count row shows the
+    // org-wide document total plus how many repos are indexed of the total.
     if (orgSession) {
       const n = orgSession.totalDocs;
       const repos = orgSession.repoDocs.size;
-      refs.countLabel.textContent = `${n.toLocaleString()} document${n === 1 ? '' : 's'} · ${repos} repo${repos === 1 ? '' : 's'}`;
+      const indexed = [...orgSession.repoState.values()].filter((s) => s.phase === 'done').length;
+      refs.orgTitle.hidden = false;
+      refs.orgTitleName.textContent = orgSession.org;
+      refs.countLabel.textContent =
+        `${n.toLocaleString()} document${n === 1 ? '' : 's'} · ${indexed}/${repos} repo${repos === 1 ? '' : 's'} indexed` +
+        (orgSession.indexing ? ' · indexing…' : '');
+      refs.countLabel.title = `${indexed} of ${repos} repositories indexed for search`;
       refs.truncatedBox.hidden = true;
       return;
     }
+    refs.orgTitle.hidden = true;
+    refs.countLabel.title = '';
     refs.countLabel.textContent = `${total} document${total === 1 ? '' : 's'}`;
     if (truncated) {
       refs.truncatedBox.hidden = false;
@@ -693,8 +701,6 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     const treeEl = refs.tree;
     treeEl.textContent = '';
     orgSession.ringEls = new Map();
-    refs.orgBar.hidden = false;
-    updateOrgBarLabel();
     const repos = [...orgSession.repoDocs.keys()].sort((a, b) =>
       a === client.repo ? -1 : b === client.repo ? 1 : a.localeCompare(b)
     );
@@ -794,6 +800,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     orgSession.repoState = orgSession.repoState || new Map();
     orgSession.repoState.set(repo, state);
     paintRing(repo);
+    updateSidebarMeta(); // keep the "X/Y repos indexed" header current
   }
 
   function orgProgressToState(ev) {
@@ -2025,7 +2032,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     const subset = new Map();
     for (const repo of repoNames) subset.set(repo, orgSession.repoDocs.get(repo) || []);
     orgSession.indexing = true;
-    updateOrgBarLabel();
+    updateSidebarMeta();
     try {
       await indexOrgContent({
         owner: client.owner,
@@ -2052,14 +2059,6 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
         renderTree();
       }
     }
-  }
-
-  function updateOrgBarLabel() {
-    if (!orgSession || !refs.orgBar || refs.orgBar.hidden) return;
-    const indexed = [...orgSession.repoState.values()].filter((s) => s.phase === 'done').length;
-    refs.orgBarLabel.textContent =
-      `${client.owner}: ${orgSession.repoDocs.size} repos · ${indexed}/${orgSession.repoDocs.size} indexed` +
-      (orgSession.indexing ? ' · indexing…' : '');
   }
 
   // ---- public ---------------------------------------------------------------
