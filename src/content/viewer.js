@@ -1551,6 +1551,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   return {
     async open(route) {
       if (!root) buildDom();
+      if (mounted && !root.isConnected) {
+        // Turbo replaced <main> under us — the old mount is gone.
+        mounted = false;
+        document.querySelectorAll('[data-gdt-hidden]').forEach((el) => el.removeAttribute('data-gdt-hidden'));
+      }
       if (!mounted) {
         if (!mount()) return;
         applyTheme();

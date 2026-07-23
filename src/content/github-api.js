@@ -154,10 +154,54 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     return { sha: root.sha, entries: mergeTruncatedTrees(rootEntries, subtrees), truncated: false };
   }
 
+  // Background ETag revalidation (stale-while-revalidate): the UI renders
+  // from cache instantly; a 304 just bumps freshness, a 200 updates storage
+  // for the next load. Never blocks the Docs tab on a network round-trip.
+  let revalidating = false;
+  function revalidateInBackground(cached) {
+    if (revalidating) return;
+    revalidating = true;
+    (async () => {
+      try {
+        const h = apiHeaders();
+        if (cached.etag) h['If-None-Match'] = cached.etag;
+        const res = await fetch(`${API}/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`, { headers: h });
+        trackRate(res);
+        const now = Date.now();
+        if (res.status === 304) {
+          await storageSet(treeKey, { ...cached, fetchedAt: now });
+          return;
+        }
+        if (!res.ok) return;
+        const body = await res.json();
+        let result = { sha: body.sha, entries: slim(body.tree), truncated: !!body.truncated };
+        if (result.truncated) {
+          try {
+            result = await expandTruncated();
+          } catch {
+            // keep the truncated listing
+          }
+        }
+        await storageSet(treeKey, { etag: res.headers.get('etag'), fetchedAt: now, ...result });
+      } catch {
+        // offline or rate-limited: the stale cache stays valid
+      } finally {
+        revalidating = false;
+      }
+    })();
+  }
+
   async function getTree({ force = false } = {}) {
     const cached = await storageGet(treeKey);
     const now = Date.now();
-    if (!force && shouldRevalidate(cached, now) === 'use') return cachedResult(cached, false);
+    if (!force) {
+      const mode = shouldRevalidate(cached, now);
+      if (mode === 'use') return cachedResult(cached, false);
+      if (mode === 'revalidate') {
+        revalidateInBackground(cached);
+        return cachedResult(cached, true);
+      }
+    }
 
     const h = apiHeaders();
     if (cached && cached.etag) h['If-None-Match'] = cached.etag;

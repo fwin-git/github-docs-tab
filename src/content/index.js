@@ -1,6 +1,7 @@
 // Content-script entry: detects repo pages, injects the Docs tab, routes
 // #docs hashes to the viewer, and survives GitHub's Turbo soft navigation.
 import { parseHash } from '../common/route.js';
+import { scanDecision } from '../common/scan-policy.js';
 import { ext } from '../common/browser.js';
 import { loadSettings, onSettingsChanged } from '../common/settings.js';
 import { makeClient } from './github-api.js';
@@ -61,16 +62,19 @@ let scanTimer = 0;
 async function scan() {
   const repoInfo = parseRepo(location.pathname);
   const nav = findRepoNav();
+  const key = repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null;
 
-  if (!repoInfo || !nav) {
-    if (current) {
+  const decision = scanDecision({ repoKey: key, navPresent: !!nav, currentKey: current && current.key });
+  if (decision !== 'proceed') {
+    if (decision !== 'wait' && current) {
+      // 'teardown' / 'teardown-wait': we actually left the repo (or switched
+      // to another one). Transient nav absence on the SAME repo keeps all
+      // in-memory state (docs, viewer, search index) for instant re-inject.
       current.viewer?.close();
       current = null;
     }
     return;
   }
-
-  const key = `${repoInfo.owner}/${repoInfo.repo}`;
   if (current && current.key === key) {
     if (current.docs) {
       if (current.docs.length) {
