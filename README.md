@@ -20,51 +20,13 @@ A browser extension for **Chrome and Firefox** that adds a **Docs** tab to every
 
 ## Installation
 
-### Guided install (recommended)
-
 ```bash
 npm install && npm run install-ext
 ```
 
-The installer builds the extension if needed, detects your browsers (Chrome, Brave, Edge, Chromium, Firefox on macOS/Linux/Windows), and offers two modes:
+The interactive installer detects your browsers (Chrome, Brave, Edge, Chromium, Firefox), opens the right extensions page, and puts the exact path in your clipboard — you finish with the 2–3 clicks browsers require for unpacked extensions. Manual steps and a permanent-Firefox path are in the **[Installation Guide](docs/installation.md)**.
 
-- **Guided install** — opens the browser's extensions page with the exact path already in your clipboard; you finish with 2–3 clicks (browsers intentionally provide no deep link that installs an unpacked extension, so those clicks are irreducible). Persists across restarts in Chromium-family browsers.
-- **Quick trial** — zero clicks: launches a throwaway browser session with the extension already loaded (`--load-extension` for Chromium-family, Mozilla's `web-ext run` for Firefox). Note: branded Google Chrome ≥137 ignores `--load-extension`; trials work best in Brave/Edge/Chromium, and the guided install works everywhere.
-
-Non-interactive: `npm run install-ext -- --browser firefox --trial`, `--list`, `--dry-run`.
-
-### Running a trial
-
-A trial is the fastest way to see the extension working — nothing is installed into your daily browser profile:
-
-```bash
-npm run install-ext -- --trial                    # prompts for the browser
-npm run install-ext -- --browser brave --trial    # Chromium-family: instant
-npm run install-ext -- --browser firefox --trial  # via `npx web-ext run`
-```
-
-What happens:
-
-1. **Chromium-family (Brave/Edge/Chromium/Chrome):** a separate browser window opens using a throwaway profile in your temp directory, launched with `--load-extension=dist`. Visit any GitHub repository — the Docs tab is already there. Close the window and the profile is inert; your normal profile is untouched.
-2. **Firefox:** the CLI runs Mozilla's `web-ext run` (fetched on first use via `npx`), which starts a fresh Firefox profile with the extension pre-loaded and live-reloads it when `dist/` changes. Keep the terminal open; `Ctrl+C` ends the session.
-
-Caveats: branded Google Chrome ≥137 ignores `--load-extension` — if the Docs tab doesn't appear there, use Brave/Edge/Chromium for the trial or the guided install (which works in every Chrome). Firefox trials are session-scoped by design; the guided install's temporary add-on lasts until Firefox restarts, and a permanent Firefox install requires a signed zip from [addons.mozilla.org](https://addons.mozilla.org/developers/).
-
-### Manual: Chrome (and Chromium/Edge/Brave)
-
-1. Open `chrome://extensions`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked** and select the `dist/` folder
-   (or drag `artifacts/github-docs-tab-chrome-v*.zip` onto the page)
-
-### Manual: Firefox
-
-Temporary install (for testing):
-
-1. Open `about:debugging#/runtime/this-firefox`
-2. Click **Load Temporary Add-on…** and select `dist/manifest.json`
-
-Permanent installs require a signed build: submit `artifacts/github-docs-tab-firefox-v*.zip` to [addons.mozilla.org](https://addons.mozilla.org/developers/) (unlisted self-distribution works too). Firefox ≥ 121.
+Want to see it before installing anything? `npm run install-ext -- --trial` launches a throwaway session with the extension pre-loaded and lands on this very repository, Docs tab and all — details in **[Running a Trial](docs/trial.md)**.
 
 ## Usage
 
@@ -75,33 +37,9 @@ Permanent installs require a signed build: submit `artifacts/github-docs-tab-fir
 - Pin important docs to the top of the sidebar with `pinned: true` in their frontmatter.
 - The circle icon toggles auto/light/dark theme; the arrows icon refreshes the doc list; GitHub/pencil icons open or edit the current file on GitHub.
 
-## Frontmatter reference
+## Frontmatter
 
-All properties are optional; docs without frontmatter work fine. Recognized keys:
-
-| Property | Type | Effect |
-| --- | --- | --- |
-| `title` | string | Document title: shown in the sidebar tree, pinned section, breadcrumbs, prev/next links, search results, and the browser tab. Takes priority over the headline-derived title; also resolves `[[wiki links]]`. |
-| `description` | string | Shown under the title at the top of the document. |
-| `tags` | array or comma string | Clickable chips (in the sidebar and on the doc) that run `tag:` searches; `tag:x` also filters search results. `keywords` and `categories` are accepted as aliases and merged. |
-| `order` | number | Sort position within its folder (ascending; `sidebar_position` is a Docusaurus-compatible alias). README/index files always sort first; docs without an order follow, sorted naturally. |
-| `pinned` | `true` / `"yes"` / `"1"` | Puts the doc in the highlighted **Pinned** section stuck to the top of the sidebar. `pin` is an alias. |
-
-Anything else (`author`, `date`, custom keys, …) appears in the collapsible **Metadata** panel at the top of the document. Frontmatter is never rendered as raw text.
-
-Example:
-
-```yaml
----
-title: Getting Started
-description: How to get going quickly.
-tags: [guide, intro]
-order: 1
-pinned: true
----
-```
-
-Parser note: the built-in YAML subset covers scalars (strings, numbers, booleans, null), quoted strings, inline arrays (`[a, b]`), dash lists, comments, and simple nested maps — the constructs that appear in real docs frontmatter. Exotic YAML (anchors, multi-line block scalars) is tolerated but shown as plain text in the metadata panel.
+Docs can declare `title`, `description`, `tags`, `order`/`sidebar_position`, and `pinned` in YAML frontmatter — the viewer uses them for sidebar titles, clickable tag chips with `tag:` search, ordering, and the pinned section, and shows everything else in a collapsible metadata panel. The full property table, example, and title-precedence rules are in the **[Frontmatter Reference](docs/frontmatter.md)** — which, like everything under `docs/`, doubles as a live showcase when you open this repo's Docs tab.
 
 ## Editing documents
 
@@ -144,7 +82,7 @@ node harness/serve.mjs   # http://localhost:8631/acme/widget — fixture repo pa
 
 The harness serves a fake GitHub repo page with stubbed `chrome.storage` and GitHub APIs, so the full content script can be exercised in a plain browser tab (no extension install needed).
 
-Architecture notes live in `docs/superpowers/specs/`, the implementation plan in `docs/superpowers/plans/`. Pure logic (path resolution, frontmatter, slugs, docs collection, wiki-link resolution, search, markdown plugins, cache policy) is in ESM modules under `src/common/` + `src/content/` and covered by tests; browser integration (tab injection, viewer, routing) is verified through the harness.
+The `docs/` folder is user documentation and doubles as the extension's live showcase (frontmatter, wiki links, pinned docs). Pure logic (path resolution, frontmatter, slugs, docs collection, wiki-link resolution, search, markdown plugins, cache policy) is in ESM modules under `src/common/` + `src/content/` and covered by tests; browser integration (tab injection, viewer, routing) is verified through the harness.
 
 ## Limitations
 

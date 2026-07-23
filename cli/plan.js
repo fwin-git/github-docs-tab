@@ -2,6 +2,10 @@
 // clipboard, and which manual steps remain. The executable wrapper only
 // executes plans; all decisions live here for testability.
 
+// Trials open the extension's own repository — its docs/ folder is written to
+// showcase the viewer (frontmatter, wiki links, pinned section, search).
+export const DEMO_URL = 'https://github.com/fwin-git/github-docs-tab';
+
 export function buildPlan(browser, { distPath, mode, tmpDir, platform }) {
   if (mode === 'trial') {
     if (browser.family === 'chromium') {
@@ -13,12 +17,12 @@ export function buildPlan(browser, { distPath, mode, tmpDir, platform }) {
           '--no-first-run',
           '--no-default-browser-check',
           `--load-extension=${distPath}`,
-          browser.extPage,
+          DEMO_URL,
         ],
         clipboard: null,
         steps: [
           'A separate browser window opens with the extension already loaded (throwaway profile).',
-          'Visit any GitHub repository and look for the Docs tab.',
+          "It lands on the extension's own repository — click its Docs tab to see the viewer in action, then try any other repo.",
         ],
         note:
           browser.id === 'chrome'
@@ -28,11 +32,11 @@ export function buildPlan(browser, { distPath, mode, tmpDir, platform }) {
     }
     return {
       kind: 'webext',
-      args: ['run', '--source-dir', distPath, ...(browser.bin ? ['--firefox', browser.bin] : [])],
+      args: ['run', '--source-dir', distPath, '--start-url', DEMO_URL, ...(browser.bin ? ['--firefox', browser.bin] : [])],
       clipboard: null,
       steps: [
-        "Mozilla's web-ext launches a fresh Firefox profile with the extension pre-loaded.",
-        'Visit any GitHub repository and look for the Docs tab. Ctrl+C here when done.',
+        "Mozilla's web-ext launches a fresh Firefox profile with the extension pre-loaded, landing on the extension's own repository.",
+        'Click its Docs tab to see the viewer in action. Ctrl+C here when done.',
       ],
       note: 'Runs via `npx web-ext` (downloaded on first use). The session is temporary by design.',
     };

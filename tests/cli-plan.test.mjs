@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detectBrowsers, findOnPath } from '../cli/browsers.js';
-import { buildPlan } from '../cli/plan.js';
+import { buildPlan, DEMO_URL } from '../cli/plan.js';
 
 const DIST = '/repo/dist';
 const TMP = '/tmp/profile';
@@ -61,14 +61,15 @@ test('guided plan for firefox opens about:debugging and copies the manifest path
   assert.ok(plan.steps.some((s) => /Load Temporary Add-on/i.test(s)));
 });
 
-test('trial plan for chromium launches a throwaway profile with --load-extension', () => {
+test('trial plan for chromium launches a throwaway profile onto the showcase repo', () => {
   const brave = { id: 'brave', name: 'Brave', family: 'chromium', extPage: 'brave://extensions/', bin: '/bin/brave' };
   const plan = buildPlan(brave, { distPath: DIST, mode: 'trial', tmpDir: TMP, platform: 'linux' });
   assert.equal(plan.kind, 'spawn');
   assert.ok(plan.args.includes(`--load-extension=${DIST}`));
   assert.ok(plan.args.includes(`--user-data-dir=${TMP}`));
   assert.ok(plan.args.includes('--no-first-run'));
-  assert.ok(plan.args.includes('brave://extensions/'));
+  assert.ok(plan.args.includes(DEMO_URL), 'opens the demo repo, not the extensions page');
+  assert.ok(!plan.args.includes('brave://extensions/'));
 });
 
 test('trial plan for branded chrome carries a compatibility note', () => {
@@ -77,15 +78,15 @@ test('trial plan for branded chrome carries a compatibility note', () => {
   assert.ok(plan.note && /Chrome/.test(plan.note));
 });
 
-test('trial plan for firefox delegates to web-ext run', () => {
+test('trial plan for firefox delegates to web-ext run starting on the showcase repo', () => {
   const firefox = { id: 'firefox', name: 'Firefox', family: 'firefox', extPage: 'about:debugging#/runtime/this-firefox', bin: '/bin/firefox' };
   const plan = buildPlan(firefox, { distPath: DIST, mode: 'trial', tmpDir: TMP, platform: 'darwin' });
   assert.equal(plan.kind, 'webext');
-  assert.deepEqual(plan.args, ['run', '--source-dir', DIST, '--firefox', '/bin/firefox']);
+  assert.deepEqual(plan.args, ['run', '--source-dir', DIST, '--start-url', DEMO_URL, '--firefox', '/bin/firefox']);
 });
 
 test('trial plan for firefox without a known binary omits --firefox', () => {
   const firefox = { id: 'firefox', name: 'Firefox', family: 'firefox', extPage: 'about:debugging#/runtime/this-firefox', bin: null };
   const plan = buildPlan(firefox, { distPath: DIST, mode: 'trial', tmpDir: TMP, platform: 'darwin' });
-  assert.deepEqual(plan.args, ['run', '--source-dir', DIST]);
+  assert.deepEqual(plan.args, ['run', '--source-dir', DIST, '--start-url', DEMO_URL]);
 });
