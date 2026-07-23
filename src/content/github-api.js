@@ -81,10 +81,14 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     if (res.status === 401) {
       return new Error('GitHub rejected the token (401) — it may be expired, revoked, or mistyped.');
     }
-    if (res.status === 404 && token) {
+    if (res.status === 404) {
       return new NotFoundError(
-        `Repo not found or the token cannot access it (404). For private org repos the token must be granted to ${owner} — ` +
-          'fine-grained tokens need the org set as resource owner (and the org must allow them); classic tokens need the "repo" scope.'
+        token
+          ? `Token cannot access ${owner}/${repo} (404). For private org repos the token must be granted to ${owner} — ` +
+              'fine-grained tokens need the org set as resource owner (and the org must allow fine-grained PATs); ' +
+              'classic tokens need the "repo" scope (plus SSO authorization if the org enforces SAML).'
+          : `Anonymous request got 404 for ${owner}/${repo} — if this repo is private, no token reached the request; ` +
+              'add/save one in the extension options and reload this tab.'
       );
     }
     return null;
