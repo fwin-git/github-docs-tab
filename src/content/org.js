@@ -24,13 +24,19 @@ export async function saveOrgSelection(owner, repos) {
   await ext.storage.local.set({ [selKey(owner)]: { repos, savedAt: Date.now() } });
 }
 
+// onProgress receives structured events:
+//   {repo, index, total, phase: 'tree'}                     — listing the repo
+//   {repo, index, total, phase: 'content', filesDone, filesTotal}
+//   {repo, index, total, phase: 'done', docsCount}
+//   {repo, index, total, phase: 'error', message}
 export async function buildOrgIndex({ owner, repoNames, settings, onProgress = () => {} }) {
   const index = new ContentIndex();
   const repoDocs = new Map();
   const errors = [];
-  let done = 0;
-  for (const repo of repoNames) {
-    onProgress(`Indexing ${repo}… (${++done}/${repoNames.length})`);
+  const total = repoNames.length;
+  for (const [i, repo] of repoNames.entries()) {
+    const base = { repo, index: i + 1, total };
+    onProgress({ ...base, phase: 'tree' });
     try {
       const client = makeClient({
         owner,
@@ -45,11 +51,13 @@ export async function buildOrgIndex({ owner, repoNames, settings, onProgress = (
         maxFiles: settings.maxFiles,
       });
       const limit = (settings.contentSearchLimitKB || 200) * 1024;
-      const queue = [...docs];
+      const queue = docs.filter((d) => !d.size || d.size <= limit);
+      const filesTotal = queue.length;
+      let filesDone = 0;
+      onProgress({ ...base, phase: 'content', filesDone, filesTotal });
       const worker = async () => {
         while (queue.length) {
           const doc = queue.shift();
-          if (doc.size && doc.size > limit) continue;
           try {
             const source = await client.getRawText(doc.path);
             const { data, content } = parseFrontmatter(source);
@@ -62,13 +70,19 @@ export async function buildOrgIndex({ owner, repoNames, settings, onProgress = (
             });
           } catch {
             // unreadable file: skip
+          } finally {
+            filesDone++;
+            onProgress({ ...base, phase: 'content', filesDone, filesTotal });
           }
         }
       };
       await Promise.all(Array.from({ length: 4 }, worker));
       repoDocs.set(repo, docs);
+      onProgress({ ...base, phase: 'done', docsCount: docs.length });
     } catch (err) {
-      errors.push({ repo, message: (err && err.message) || String(err) });
+      const message = (err && err.message) || String(err);
+      errors.push({ repo, message });
+      onProgress({ ...base, phase: 'error', message });
     }
   }
   return { index, repoDocs, errors };

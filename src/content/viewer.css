@@ -1681,3 +1681,141 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- org modal v2: fixed rows, filter, progress ---------------------------- */
+
+#gdt-root .gdt-modal-wide {
+  width: min(640px, 94vw);
+}
+
+#gdt-root .gdt-modal label.gdt-org-repo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--gdt-fg);
+  white-space: nowrap;
+}
+
+#gdt-root .gdt-org-repo-row input[type='checkbox'] {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+#gdt-root .gdt-org-chip {
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--gdt-fg-muted);
+  border: 1px solid var(--gdt-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+#gdt-root .gdt-org-repo-desc {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#gdt-root .gdt-modal .gdt-filter-input {
+  margin-bottom: 8px;
+}
+
+#gdt-root .gdt-prog {
+  display: block;
+  height: 6px;
+  background: var(--gdt-bg-muted);
+  border: 1px solid var(--gdt-border-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+#gdt-root .gdt-prog i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--gdt-accent);
+  transition: width 0.15s ease;
+}
+
+#gdt-root .gdt-prog-lg {
+  height: 10px;
+}
+
+#gdt-root .gdt-org-overall {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+#gdt-root .gdt-org-overall .gdt-prog {
+  flex: 1 1 auto;
+}
+
+#gdt-root .gdt-org-overall-label {
+  flex: none;
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+  min-width: 150px;
+  text-align: right;
+}
+
+#gdt-root .gdt-org-runlist {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--gdt-border-muted);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+#gdt-root .gdt-org-runrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 130px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--gdt-border-muted);
+  font-size: 13px;
+}
+
+#gdt-root .gdt-org-runrow:last-child {
+  border-bottom: 0;
+}
+
+#gdt-root .gdt-org-runname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+#gdt-root .gdt-org-runstatus {
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+#gdt-root .gdt-run-ok .gdt-prog i {
+  background: var(--gdt-success);
+}
+
+#gdt-root .gdt-run-ok .gdt-org-runstatus {
+  color: var(--gdt-success);
+}
+
+#gdt-root .gdt-run-err .gdt-prog i {
+  background: var(--gdt-danger);
+}
+
+#gdt-root .gdt-run-err .gdt-org-runstatus {
+  color: var(--gdt-danger);
+}

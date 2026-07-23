@@ -985,20 +985,29 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   async function openOrgModal() {
     const backdrop = h(`
       <div class="gdt-modal-backdrop">
-        <div class="gdt-modal" role="dialog" aria-label="Organization docs">
+        <div class="gdt-modal gdt-modal-wide" role="dialog" aria-label="Organization docs">
           <h3>Search across ${md.utils.escapeHtml(client.owner)}</h3>
           <p class="gdt-modal-note" data-o-note>Loading repositories…</p>
-          <div class="gdt-org-toolbar" data-o-toolbar hidden>
-            <button type="button" class="gdt-btn gdt-btn-sm" data-o-all>All</button>
-            <button type="button" class="gdt-btn gdt-btn-sm" data-o-none>None</button>
-            <span class="gdt-org-selcount" data-o-count></span>
+          <div data-o-select hidden>
+            <input class="gdt-filter-input" data-o-filter type="search" placeholder="Filter repositories…" autocomplete="off" spellcheck="false" />
+            <div class="gdt-org-toolbar">
+              <button type="button" class="gdt-btn gdt-btn-sm" data-o-all>All</button>
+              <button type="button" class="gdt-btn gdt-btn-sm" data-o-none>None</button>
+              <span class="gdt-org-selcount" data-o-count></span>
+            </div>
+            <div class="gdt-org-repolist" data-o-list></div>
           </div>
-          <div class="gdt-org-repolist" data-o-list></div>
+          <div data-o-run hidden>
+            <div class="gdt-org-overall">
+              <div class="gdt-prog gdt-prog-lg"><i data-o-overall-bar></i></div>
+              <span class="gdt-org-overall-label" data-o-overall-label>0%</span>
+            </div>
+            <div class="gdt-org-runlist" data-o-runlist></div>
+          </div>
           <div class="gdt-modal-actions">
             <button type="button" class="gdt-btn" data-o-cancel>Cancel</button>
             <button type="button" class="gdt-btn gdt-btn-primary" data-o-go disabled>Index selected</button>
           </div>
-          <p class="gdt-modal-progress" data-o-progress hidden aria-live="polite"></p>
         </div>
       </div>
     `);
@@ -1025,12 +1034,12 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     const preselected = new Set(previous ? previous.repos : repoList.filter((r) => !r.archived).map((r) => r.name));
 
     q('[data-o-note]').textContent = client.hasToken
-      ? `Select the repositories to include. Listings are cached per repo; content is indexed for this page session (${repoList.length} repos found).`
-      : `Warning: no token configured — anonymous API access (60 requests/hour) will not get far. Add a token in the extension options first.`;
-    q('[data-o-toolbar]').hidden = false;
+      ? `${repoList.length} repositories. Listings are cached per repo; content is indexed for this page session.`
+      : 'Warning: no token configured — anonymous API access (60 requests/hour) will not get far. Add a token in the extension options first.';
+    q('[data-o-select]').hidden = false;
 
     const listEl = q('[data-o-list]');
-    const boxes = [];
+    const rows = [];
     for (const r of repoList) {
       const label = document.createElement('label');
       label.className = 'gdt-org-repo-row';
@@ -1038,60 +1047,124 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       cb.type = 'checkbox';
       cb.checked = preselected.has(r.name);
       cb.value = r.name;
-      boxes.push(cb);
       const name = Object.assign(document.createElement('span'), {
-        textContent: r.name + (r.archived ? ' (archived)' : ''),
-        className: 'gdt-org-repo-name' + (r.archived ? ' gdt-org-archived' : ''),
-      });
-      const desc = Object.assign(document.createElement('span'), {
-        textContent: r.description.slice(0, 80),
-        className: 'gdt-org-repo-desc',
+        textContent: r.name,
+        className: 'gdt-org-repo-name',
       });
       label.appendChild(cb);
       label.appendChild(name);
+      if (r.archived) {
+        label.appendChild(Object.assign(document.createElement('span'), { textContent: 'archived', className: 'gdt-org-chip' }));
+      }
+      const desc = Object.assign(document.createElement('span'), {
+        textContent: r.description,
+        className: 'gdt-org-repo-desc',
+        title: r.description,
+      });
       label.appendChild(desc);
       listEl.appendChild(label);
       cb.addEventListener('change', updateCount);
+      rows.push({ row: label, cb, haystack: `${r.name} ${r.description}`.toLowerCase() });
     }
+
     const goBtn = q('[data-o-go]');
     function updateCount() {
-      const n = boxes.filter((b) => b.checked).length;
+      const n = rows.filter((r) => r.cb.checked).length;
       q('[data-o-count]').textContent = `${n} of ${repoList.length} selected`;
       goBtn.disabled = n === 0;
       goBtn.textContent = `Index ${n} repositor${n === 1 ? 'y' : 'ies'}`;
     }
+    const visibleRows = () => rows.filter((r) => !r.row.hidden);
     q('[data-o-all]').addEventListener('click', () => {
-      boxes.forEach((b) => (b.checked = true));
+      visibleRows().forEach((r) => (r.cb.checked = true));
       updateCount();
     });
     q('[data-o-none]').addEventListener('click', () => {
-      boxes.forEach((b) => (b.checked = false));
+      visibleRows().forEach((r) => (r.cb.checked = false));
       updateCount();
+    });
+    q('[data-o-filter]').addEventListener('input', () => {
+      const needle = q('[data-o-filter]').value.trim().toLowerCase();
+      for (const r of rows) r.row.hidden = !!needle && !r.haystack.includes(needle);
     });
     updateCount();
 
     goBtn.addEventListener('click', async () => {
-      const chosen = boxes.filter((b) => b.checked).map((b) => b.value);
-      const progress = q('[data-o-progress]');
-      progress.hidden = false;
-      goBtn.disabled = true;
-      q('[data-o-cancel]').disabled = true;
+      const chosen = rows.filter((r) => r.cb.checked).map((r) => r.cb.value);
       await saveOrgSelection(client.owner, chosen);
+
+      // swap to the progress view: one row + bar per repo, plus an overall bar
+      q('[data-o-select]').hidden = true;
+      q('[data-o-note]').hidden = true;
+      q('[data-o-run]').hidden = false;
+      goBtn.hidden = true;
+      q('[data-o-cancel]').disabled = true;
+      const runlist = q('[data-o-runlist]');
+      const runRows = new Map();
+      for (const repo of chosen) {
+        const row = h(
+          `<div class="gdt-org-runrow"><span class="gdt-org-runname">${md.utils.escapeHtml(repo)}</span><span class="gdt-prog"><i></i></span><span class="gdt-org-runstatus">queued</span></div>`
+        );
+        runlist.appendChild(row);
+        runRows.set(repo, { row, bar: row.querySelector('.gdt-prog i'), status: row.querySelector('.gdt-org-runstatus') });
+      }
+      const overallBar = q('[data-o-overall-bar]');
+      const overallLabel = q('[data-o-overall-label]');
+      let finished = 0;
+      let currentFraction = 0;
+      const updateOverall = () => {
+        const pct = Math.round(((finished + currentFraction) / chosen.length) * 100);
+        overallBar.style.width = `${pct}%`;
+        overallLabel.textContent = `${finished}/${chosen.length} repositories · ${pct}%`;
+      };
+      updateOverall();
+
+      const onProgress = (ev) => {
+        const r = runRows.get(ev.repo);
+        if (!r) return;
+        if (ev.phase === 'tree') {
+          r.status.textContent = 'listing…';
+          r.bar.style.width = '8%';
+          currentFraction = 0.05;
+        } else if (ev.phase === 'content') {
+          const frac = ev.filesTotal ? ev.filesDone / ev.filesTotal : 1;
+          r.status.textContent = ev.filesTotal ? `${ev.filesDone}/${ev.filesTotal} files` : 'no files';
+          r.bar.style.width = `${Math.round(8 + frac * 92)}%`;
+          currentFraction = 0.05 + frac * 0.95;
+        } else if (ev.phase === 'done') {
+          r.status.textContent = `${ev.docsCount} docs`;
+          r.bar.style.width = '100%';
+          r.row.classList.add('gdt-run-ok');
+          finished++;
+          currentFraction = 0;
+        } else if (ev.phase === 'error') {
+          r.status.textContent = ev.message.slice(0, 60);
+          r.status.title = ev.message;
+          r.bar.style.width = '100%';
+          r.row.classList.add('gdt-run-err');
+          finished++;
+          currentFraction = 0;
+        }
+        updateOverall();
+        r.row.scrollIntoView({ block: 'nearest' });
+      };
+
       try {
-        const result = await buildOrgIndex({
-          owner: client.owner,
-          repoNames: chosen,
-          settings,
-          onProgress: (t) => (progress.textContent = t),
-        });
+        const result = await buildOrgIndex({ owner: client.owner, repoNames: chosen, settings, onProgress });
         let totalDocs = 0;
         for (const docsOfRepo of result.repoDocs.values()) totalDocs += docsOfRepo.length;
         orgSession = { org: client.owner, ...result, totalDocs };
         renderTree();
-        closeModal();
+        if (result.errors.length) {
+          overallLabel.textContent = `Done — ${result.errors.length} repositor${result.errors.length === 1 ? 'y' : 'ies'} skipped (see rows)`;
+          const cancel = q('[data-o-cancel]');
+          cancel.disabled = false;
+          cancel.textContent = 'Close';
+        } else {
+          setTimeout(closeModal, 500);
+        }
       } catch (err) {
-        progress.textContent = `Failed: ${(err && err.message) || err}`;
-        goBtn.disabled = false;
+        overallLabel.textContent = `Failed: ${(err && err.message) || err}`;
         q('[data-o-cancel]').disabled = false;
       }
     });
