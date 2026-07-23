@@ -64,9 +64,25 @@ async function init() {
     setTimeout(() => ($('save-status').hidden = true), 4000);
   });
 
+  // Inline save appears once a *field* token tests OK and differs from what
+  // is stored — the exact situation where forgetting to save bites.
+  $('token').addEventListener('input', () => {
+    $('save-token').hidden = true;
+  });
+
+  $('save-token').addEventListener('click', async () => {
+    await saveSettings({ token: $('token').value.trim() });
+    showSaved(await loadSettings());
+    $('save-token').hidden = true;
+    showStatus($('token-status'), 'Token saved — reload open GitHub tabs to apply.', true);
+  });
+
   $('test-token').addEventListener('click', async () => {
-    const token = $('token').value.trim() || (await loadSettings()).token;
+    const field = $('token').value.trim();
+    const stored = (await loadSettings()).token;
+    const token = field || stored;
     const status = $('token-status');
+    $('save-token').hidden = true;
     if (!token) {
       showStatus(status, 'No token entered — the extension will use anonymous access.', true);
       return;
@@ -79,13 +95,16 @@ async function init() {
       if (res.ok) {
         const user = await res.json();
         const limit = res.headers.get('x-ratelimit-limit');
+        const unsaved = field && field !== stored;
         showStatus(
           status,
-          `Token OK — authenticated as ${user.login} (${limit || '5000'} requests/hour). ` +
-            'Note: this does not verify repo access — for private org repos, fine-grained tokens must be granted to that org, ' +
+          `Token OK — authenticated as ${user.login} (${limit || '5000'} requests/hour).` +
+            (unsaved ? ' Not saved yet — click "Save token".' : '') +
+            ' Note: this does not verify repo access — for private org repos, fine-grained tokens must be granted to that org, ' +
             'and orgs with SAML SSO require "Configure SSO" on classic tokens.',
           true
         );
+        $('save-token').hidden = !unsaved;
       } else {
         showStatus(status, `Token rejected by GitHub (HTTP ${res.status}).`, false);
       }
