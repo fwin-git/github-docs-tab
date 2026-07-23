@@ -75,6 +75,34 @@ Permanent installs require a signed build: submit `artifacts/github-docs-tab-fir
 - Pin important docs to the top of the sidebar with `pinned: true` in their frontmatter.
 - The circle icon toggles auto/light/dark theme; the arrows icon refreshes the doc list; GitHub/pencil icons open or edit the current file on GitHub.
 
+## Frontmatter reference
+
+All properties are optional; docs without frontmatter work fine. Recognized keys:
+
+| Property | Type | Effect |
+| --- | --- | --- |
+| `title` | string | Document title: shown in the sidebar tree, pinned section, breadcrumbs, prev/next links, search results, and the browser tab. Takes priority over the headline-derived title; also resolves `[[wiki links]]`. |
+| `description` | string | Shown under the title at the top of the document. |
+| `tags` | array or comma string | Clickable chips (in the sidebar and on the doc) that run `tag:` searches; `tag:x` also filters search results. `keywords` and `categories` are accepted as aliases and merged. |
+| `order` | number | Sort position within its folder (ascending; `sidebar_position` is a Docusaurus-compatible alias). README/index files always sort first; docs without an order follow, sorted naturally. |
+| `pinned` | `true` / `"yes"` / `"1"` | Puts the doc in the highlighted **Pinned** section stuck to the top of the sidebar. `pin` is an alias. |
+
+Anything else (`author`, `date`, custom keys, …) appears in the collapsible **Metadata** panel at the top of the document. Frontmatter is never rendered as raw text.
+
+Example:
+
+```yaml
+---
+title: Getting Started
+description: How to get going quickly.
+tags: [guide, intro]
+order: 1
+pinned: true
+---
+```
+
+Parser note: the built-in YAML subset covers scalars (strings, numbers, booleans, null), quoted strings, inline arrays (`[a, b]`), dash lists, comments, and simple nested maps — the constructs that appear in real docs frontmatter. Exotic YAML (anchors, multi-line block scalars) is tolerated but shown as plain text in the metadata panel.
+
 ## Editing documents
 
 The pencil button in the viewer's toolbar opens a **live editor**: markdown source on the left, an instantly updating preview on the right — rendered by exactly the same pipeline as the viewer (wiki links, alerts, highlighting, all of it) — plus a formatting toolbar (bold/italic/code/headings/lists/tasks/links/wiki links). It is deliberately a source editor with live preview rather than contentEditable WYSIWYG: HTML→markdown round-trips corrupt formatting and produce noisy diffs, which matters when the output becomes a commit.
