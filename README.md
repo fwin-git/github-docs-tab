@@ -61,7 +61,7 @@ Want to see it before installing anything? `npm run install-ext -- --trial` laun
 - Pin important docs to the top of the sidebar with `pinned: true` in their frontmatter.
 - The circle icon toggles auto/light/dark theme; the arrows icon refreshes the doc list; GitHub/pencil icons open or edit the current file on GitHub.
 
-## Frontmatter
+## Frontmatter Format
 
 Docs can declare `title`, `description`, `tags`, `order`/`sidebar_position`, and `pinned` in YAML frontmatter — the viewer uses them for sidebar titles, clickable tag chips with `tag:` search, ordering, and the pinned section, and shows everything else in a collapsible metadata panel. The full property table, example, and title-precedence rules are in the **[Frontmatter Reference](docs/frontmatter.md)** — which, like everything under `docs/`, doubles as a live showcase when you open this repo's Docs tab.
 
@@ -74,8 +74,6 @@ Saving is always an explicit, confirmed step, with three routes:
 1. **Propose via GitHub editor** — no token needed. Your edit is stashed locally and the extension navigates to GitHub's own file editor (`/edit/…`), where it pre-fills your changes; you review and press GitHub's native **Commit changes…** button, so the commit/branch/fork/PR flow runs entirely through GitHub's UI under your logged-in account. (The extension cannot — and should not — commit directly with your browser session: those endpoints are CSRF-protected by design.) If auto-fill fails on a GitHub editor redesign, a toast offers your edited content for one-click copy.
 2. **Create pull request…** — fully automatic, requires an API token (options) with *Contents* and *Pull requests* write permission. Creates a branch from the default branch, commits the single-file change, and opens a PR — using your fork automatically when you lack push access. You get the PR link when it's done.
 3. **Download .patch / Copy patch** — no auth at all. A standard unified diff (`git apply file.patch` or `patch -p1 < file.patch`), generated locally.
-
-**Drafting & batch publishing:** instead of publishing each file immediately, **Save draft** stages the edit locally (per repository, surviving reloads). Drafted files get a dot in the sidebar tree and collect in a **Drafts** section, where you can keep editing, discard individually, or — once you're done with the whole session — hit **Publish session…**: one branch, one commit per file, one pull request (auto-fork as usual), or download the entire session as a single multi-file `.patch`.
 
 ## Options
 
