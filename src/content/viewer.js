@@ -54,6 +54,8 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm5.657-8.157a.75.75 0 0 1 0 1.061l-1.061 1.06a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.06-1.06a.75.75 0 0 1 1.06 0Zm-9.193 9.193a.75.75 0 0 1 0 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061a.75.75 0 0 1 1.061 0ZM8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0ZM3 8a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 3 8Zm13 0a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8Zm-8 5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 13Zm3.536-1.464a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 0 1-1.06 1.061l-1.061-1.06a.75.75 0 0 1 0-1.061ZM2.343 2.343a.75.75 0 0 1 1.061 0l1.06 1.061a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-1.06-1.06a.75.75 0 0 1 0-1.06Z"></path></svg>',
   moon:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z"></path></svg>',
+  link:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 2 2 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a2 2 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 2 2 0 0 0-2.83 0l-2.5 2.5a2.002 2.002 0 0 0 0 2.83Z"></path></svg>',
   copy:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg>',
   check:
@@ -292,6 +294,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
                 <div class="gdt-search-results" data-gdt-results hidden></div>
               </div>
               <div class="gdt-actions">
+                <button class="gdt-iconbtn" data-gdt-copy-link type="button" title="Copy deep link to this document" disabled>${ICONS.link}</button>
                 <button class="gdt-iconbtn" data-gdt-copy-md type="button" title="Copy document markdown" disabled>${ICONS.copy}</button>
                 <button class="gdt-iconbtn" data-gdt-live-edit type="button" title="Edit this document in the viewer" disabled>${ICONS.edit}</button>
                 <button class="gdt-iconbtn" data-gdt-theme-toggle type="button" title="Theme: auto">${ICONS.theme}</button>
@@ -325,6 +328,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       titleToggle: root.querySelector('[data-gdt-title-toggle]'),
       liveEdit: root.querySelector('[data-gdt-live-edit]'),
       copyMd: root.querySelector('[data-gdt-copy-md]'),
+      copyLink: root.querySelector('[data-gdt-copy-link]'),
       crumbs: root.querySelector('[data-gdt-crumbs]'),
       searchInput: root.querySelector('[data-gdt-search]'),
       results: root.querySelector('[data-gdt-results]'),
@@ -403,6 +407,19 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     });
     refs.liveEdit.addEventListener('click', () => {
       if (currentPath) openEditor(currentPath);
+    });
+    refs.copyLink.addEventListener('click', () => {
+      if (!currentPath) return;
+      const activeSlug = refs.toc.querySelector('a.gdt-toc-active')?.getAttribute('data-gdt-toc-slug') || null;
+      const url = `https://github.com/${client.owner}/${client.repo}${buildHash({ path: currentPath, heading: activeSlug })}`;
+      copyText(url).then((ok) => {
+        refs.copyLink.innerHTML = ok ? ICONS.check : ICONS.link;
+        refs.copyLink.title = ok ? 'Link copied!' : 'Clipboard unavailable';
+        setTimeout(() => {
+          refs.copyLink.innerHTML = ICONS.link;
+          refs.copyLink.title = 'Copy deep link to this document';
+        }, 1400);
+      });
     });
     refs.copyMd.addEventListener('click', async () => {
       if (!currentPath) return;
@@ -660,6 +677,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   function renderOrgTree() {
     const treeEl = refs.tree;
     treeEl.textContent = '';
+    orgSession.ringEls = new Map();
     refs.orgBar.hidden = false;
     const base = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
     refs.orgBarLabel.textContent = orgSession.indexing ? `${base} · indexing search ${orgSession.indexPct || 0}%` : base;
@@ -680,6 +698,11 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       head.appendChild(
         Object.assign(document.createElement('span'), { textContent: String(docsOfRepo.length), className: 'gdt-org-count' })
       );
+      const ring = document.createElement('span');
+      ring.className = 'gdt-org-ring';
+      head.appendChild(ring);
+      orgSession.ringEls.set(repo, ring);
+      paintRing(repo);
       const isCurrent = repo === client.repo;
       const body = isCurrent
         ? renderNodes(tree, 0)
@@ -703,6 +726,45 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       note.textContent = `${errs.length} repo(s) skipped: ${errs.map((e) => e.repo).join(', ')}`;
       treeEl.appendChild(note);
     }
+  }
+
+  function paintRing(repo) {
+    const ring = orgSession && orgSession.ringEls && orgSession.ringEls.get(repo);
+    if (!ring) return;
+    const st = (orgSession.repoState && orgSession.repoState.get(repo)) || { phase: 'idle', pct: 0 };
+    ring.classList.remove('gdt-ring-done', 'gdt-ring-err', 'gdt-ring-active');
+    ring.style.background = '';
+    ring.textContent = '';
+    if (st.phase === 'done') {
+      ring.classList.add('gdt-ring-done');
+      ring.title = 'Indexed for search';
+    } else if (st.phase === 'error') {
+      ring.classList.add('gdt-ring-err');
+      ring.title = st.message || 'Indexing failed';
+    } else if (st.phase === 'idle') {
+      ring.title = 'Not indexed yet';
+    } else {
+      ring.classList.add('gdt-ring-active');
+      const deg = Math.max(0, Math.min(100, st.pct || 0)) * 3.6;
+      ring.style.background = `conic-gradient(var(--gdt-accent) ${deg}deg, var(--gdt-border) 0)`;
+      ring.title = `Indexing… ${st.pct || 0}%`;
+    }
+  }
+
+  // Records per-repo index state and repaints only that ring (no full re-render).
+  function setRepoState(repo, state) {
+    if (!orgSession) return;
+    orgSession.repoState = orgSession.repoState || new Map();
+    orgSession.repoState.set(repo, state);
+    paintRing(repo);
+  }
+
+  function orgProgressToState(ev) {
+    if (ev.phase === 'done') return { phase: 'done' };
+    if (ev.phase === 'error') return { phase: 'error', message: ev.message };
+    if (ev.phase === 'tree') return { phase: 'indexing', pct: 3 };
+    const frac = ev.filesTotal ? ev.filesDone / ev.filesTotal : 1;
+    return { phase: ev.filesDone >= ev.filesTotal ? 'done' : 'indexing', pct: Math.round(frac * 100) };
   }
 
   function renderPinned() {
@@ -938,6 +1000,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     refs.openGh.href = client.blobUrl(path);
     refs.liveEdit.disabled = false;
     refs.copyMd.disabled = false;
+    refs.copyLink.disabled = false;
 
     refs.article.textContent = '';
     refreshDraftBanner();
@@ -1121,7 +1184,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       };
       updateOverall();
 
+      const modalState = new Map();
       const onProgress = (ev) => {
+        modalState.set(ev.repo, orgProgressToState(ev));
         const r = runRows.get(ev.repo);
         if (!r) return;
         if (ev.phase === 'tree') {
@@ -1156,7 +1221,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
         if (!result.repoDocs.has(client.repo)) result.repoDocs.set(client.repo, docs);
         let totalDocs = 0;
         for (const docsOfRepo of result.repoDocs.values()) totalDocs += docsOfRepo.length;
-        orgSession = { org: client.owner, ...result, totalDocs, indexing: false };
+        const repoState = new Map();
+        for (const repo of result.repoDocs.keys()) repoState.set(repo, modalState.get(repo) || { phase: 'done' });
+        orgSession = { org: client.owner, ...result, totalDocs, indexing: false, repoState };
         saveOrgSnapshot(client.owner, result.repoDocs);
         renderTree();
         if (result.errors.length) {
@@ -1507,6 +1574,29 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     box.appendChild(retry);
   }
 
+  // ---- clipboard ------------------------------------------------------------
+
+  function copyText(text) {
+    const fallback = () => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok;
+      } catch {
+        return false;
+      }
+    };
+    return navigator.clipboard.writeText(text).then(
+      () => true,
+      () => fallback()
+    );
+  }
+
   // ---- live editor ----------------------------------------------------------
 
   async function openEditor(path) {
@@ -1840,6 +1930,8 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     if (!snap.has(client.repo)) snap.set(client.repo, docs);
     let totalDocs = 0;
     for (const d of snap.values()) totalDocs += d.length;
+    const repoState = new Map();
+    for (const repo of snap.keys()) repoState.set(repo, { phase: 'idle', pct: 0 });
     orgSession = {
       org: client.owner,
       index: new ContentIndex(),
@@ -1848,6 +1940,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       totalDocs,
       indexing: true,
       indexPct: 0,
+      repoState,
     };
     renderTree();
     try {
@@ -1858,8 +1951,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
         settings,
         onProgress: (ev) => {
           if (!orgSession) return;
-          // rough overall percent across repos
-          orgSession.indexPct = Math.round((ev.index - 1 + (ev.filesTotal ? ev.filesDone / ev.filesTotal : 1)) / ev.total * 100);
+          const frac = ev.filesTotal ? ev.filesDone / ev.filesTotal : 1;
+          setRepoState(ev.repo, { phase: ev.filesDone >= ev.filesTotal ? 'done' : 'indexing', pct: Math.round(frac * 100) });
+          orgSession.indexPct = Math.round(((ev.index - 1 + frac) / ev.total) * 100);
           if (orgSession.indexing && refs.orgBar && !refs.orgBar.hidden) {
             const base = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
             refs.orgBarLabel.textContent = `${base} · indexing search ${orgSession.indexPct}%`;

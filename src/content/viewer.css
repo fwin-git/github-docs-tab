@@ -1819,3 +1819,47 @@
 #gdt-root .gdt-run-err .gdt-org-runstatus {
   color: var(--gdt-danger);
 }
+
+/* ---- per-repo index ring (org sidebar) ------------------------------------ */
+
+#gdt-root .gdt-org-ring {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+  color: #fff;
+  box-sizing: border-box;
+  border: 1.5px solid var(--gdt-border);
+}
+
+/* idle: hollow ring (border only, set above) */
+
+#gdt-root .gdt-org-ring.gdt-ring-active {
+  border: 0;
+  /* conic-gradient set inline; mask carves the centre into a ring */
+  -webkit-mask: radial-gradient(circle 3.5px at center, transparent 98%, #000 100%);
+  mask: radial-gradient(circle 3.5px at center, transparent 98%, #000 100%);
+}
+
+#gdt-root .gdt-org-ring.gdt-ring-done {
+  border: 0;
+  background: var(--gdt-success);
+}
+
+#gdt-root .gdt-org-ring.gdt-ring-done::after {
+  content: '✓';
+}
+
+#gdt-root .gdt-org-ring.gdt-ring-err {
+  border: 0;
+  background: var(--gdt-danger);
+}
+
+#gdt-root .gdt-org-ring.gdt-ring-err::after {
+  content: '!';
+}
