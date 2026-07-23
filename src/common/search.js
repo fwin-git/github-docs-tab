@@ -77,6 +77,7 @@ export class ContentIndex {
       text,
       textLower: text.toLowerCase(),
       titleLower: String(title).toLowerCase(),
+      headings: headings.map((h) => String(h)),
       headingsLower: headings.map((h) => String(h).toLowerCase()),
       tagsLower: tags.map((t) => String(t).toLowerCase()),
     });
@@ -102,11 +103,12 @@ export class ContentIndex {
       if (tags.length && !tags.every((t) => e.tagsLower.includes(t))) continue;
       if (!needles.length) {
         if (!tags.length) continue;
-        results.push({ path, score: 1, snippet: snippetOf(e, [], -1), matchedIn: 'tag' });
+        results.push({ path, score: 1, snippet: snippetOf(e, [], -1), matchedIn: 'tag', matchedHeading: null });
         continue;
       }
       let score = 0;
       let firstBodyHit = -1;
+      let matchedHeading = null;
       let ok = true;
       for (const n of needles) {
         let tier = 0;
@@ -114,9 +116,11 @@ export class ContentIndex {
           score += 100;
           tier = 3;
         }
-        if (e.headingsLower.some((h) => h.includes(n))) {
+        const hi = e.headingsLower.findIndex((h) => h.includes(n));
+        if (hi !== -1) {
           score += 50;
           tier = Math.max(tier, 2);
+          if (matchedHeading === null) matchedHeading = e.headings[hi];
         }
         const bi = e.textLower.indexOf(n);
         if (bi !== -1) {
@@ -131,7 +135,7 @@ export class ContentIndex {
       }
       if (!ok) continue;
       const matchedIn = score >= 100 ? 'title' : score >= 50 ? 'heading' : 'body';
-      results.push({ path, score, snippet: snippetOf(e, needles, firstBodyHit), matchedIn });
+      results.push({ path, score, snippet: snippetOf(e, needles, firstBodyHit), matchedIn, matchedHeading });
     }
     results.sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : 1));
     return results.slice(0, limit);

@@ -130,6 +130,15 @@ test('tag-only queries list tagged docs', () => {
   );
 });
 
+test('heading matches expose the matched heading text', () => {
+  const idx = makeIndex();
+  const results = idx.search(parseQuery('prerequisites'), { limit: 10 });
+  assert.equal(results[0].path, 'docs/install.md');
+  assert.equal(results[0].matchedHeading, 'Prerequisites');
+  const body = idx.search(parseQuery('installer'), { limit: 10 });
+  assert.equal(body[0].matchedHeading, null);
+});
+
 test('allTags aggregates counts; remove() drops entries', () => {
   const idx = makeIndex();
   assert.equal(idx.allTags().get('setup'), 1);
