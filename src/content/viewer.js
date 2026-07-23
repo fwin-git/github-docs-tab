@@ -24,6 +24,7 @@ import { createMarkdownIt } from './markdown.js';
 import { renderDoc } from './render-doc.js';
 import { createSearchUI } from './search-ui.js';
 import { loadDrafts, saveDraft, removeDraft, clearDrafts } from './drafts.js';
+import { loadOrgSelection, saveOrgSelection, buildOrgIndex, ORG_SEP } from './org.js';
 import { RateLimitError } from './github-api.js';
 
 const ICONS = {
@@ -35,6 +36,8 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>',
   pin:
     '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4.456.734a1.75 1.75 0 0 1 2.826.504l.613 1.327a3.081 3.081 0 0 0 2.084 1.707l2.454.584c1.332.317 1.8 1.972.832 2.94L11.06 10l3.72 3.72a.749.749 0 1 1-1.06 1.06L10 11.06l-2.204 2.205c-.968.968-2.623.5-2.94-.832l-.584-2.454a3.081 3.081 0 0 0-1.707-2.084l-1.327-.613a1.75 1.75 0 0 1-.504-2.826L4.456.734ZM5.92 1.866a.25.25 0 0 0-.404-.072L1.794 5.516a.25.25 0 0 0 .072.404l1.328.613A4.582 4.582 0 0 1 5.73 9.63l.584 2.454a.25.25 0 0 0 .42.12l5.47-5.47a.25.25 0 0 0-.12-.42L9.63 5.73a4.581 4.581 0 0 1-3.098-2.537L5.92 1.866Z"></path></svg>',
+  org:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M1.75 16A1.75 1.75 0 0 1 0 14.25V1.75C0 .784.784 0 1.75 0h8.5C11.216 0 12 .784 12 1.75v12.5c0 .085-.006.168-.018.25h2.268a.25.25 0 0 0 .25-.25V8.285a.25.25 0 0 0-.111-.208l-1.055-.703a.749.749 0 1 1 .832-1.248l1.055.703c.487.325.779.871.779 1.456v5.965A1.75 1.75 0 0 1 14.25 16h-3.5a.766.766 0 0 1-.197-.026c-.099.017-.2.026-.303.026h-3a.75.75 0 0 1-.75-.75V14h-1v1.25a.75.75 0 0 1-.75.75Zm-.25-1.75c0 .138.112.25.25.25H4v-1.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 .75.75v1.25h2.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25ZM3.75 6h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1 0-1.5ZM3 3.75A.75.75 0 0 1 3.75 3h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 3 3.75Zm4 3A.75.75 0 0 1 7.75 6h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 7 6.75ZM7.75 3h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1 0-1.5ZM3 9.75A.75.75 0 0 1 3.75 9h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 3 9.75ZM7.75 9h.5a.75.75 0 0 1 0 1.5h-.5a.75.75 0 0 1 0-1.5Z"></path></svg>',
   heading:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3.75 2a.75.75 0 0 1 .75.75V7h7V2.75a.75.75 0 0 1 1.5 0v10.5a.75.75 0 0 1-1.5 0V8.5h-7v4.75a.75.75 0 0 1-1.5 0V2.75A.75.75 0 0 1 3.75 2Z"></path></svg>',
   search:
@@ -88,6 +91,8 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   let treeFilter = '';
   let editor = null; // { path, original, savedDraftContent, el, textarea, preview, status, dirty, buttons }
   let drafts = {}; // { [path]: {content, baseSha, savedAt} } — staged session edits
+  let orgSession = null; // { org, index, repoDocs, totalDocs, errors }
+  const orgExpanded = new Set([client.repo]);
   loadDrafts(client.owner, client.repo).then((d) => {
     drafts = d;
     if (mounted) {
@@ -250,11 +255,16 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
             <div class="gdt-side-head">
               <span class="gdt-doc-count" data-gdt-count-label></span>
               <span class="gdt-side-actions">
+                <button class="gdt-iconbtn" data-gdt-org type="button" title="Search across the whole organization…">${ICONS.org}</button>
                 <button class="gdt-iconbtn" data-gdt-title-toggle type="button"></button>
                 <button class="gdt-iconbtn" data-gdt-refresh type="button" title="Refresh docs list">${ICONS.refresh}</button>
               </span>
             </div>
             <div class="gdt-truncated" data-gdt-truncated hidden></div>
+            <div class="gdt-orgbar" data-gdt-orgbar hidden>
+              <span data-gdt-orgbar-label></span>
+              <button type="button" class="gdt-draft-x" data-gdt-orgbar-close title="Back to this repository only">×</button>
+            </div>
             <input class="gdt-filter-input" data-gdt-filter type="search" placeholder="Filter files…" autocomplete="off" spellcheck="false" aria-label="Filter file tree" />
             <div class="gdt-tags" data-gdt-tags hidden></div>
             <div class="gdt-pinned" data-gdt-pinned hidden>
@@ -305,6 +315,8 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       tags: root.querySelector('[data-gdt-tags]'),
       pinned: root.querySelector('[data-gdt-pinned]'),
       pinnedList: root.querySelector('[data-gdt-pinned-list]'),
+      orgBar: root.querySelector('[data-gdt-orgbar]'),
+      orgBarLabel: root.querySelector('[data-gdt-orgbar-label]'),
       draftsBox: root.querySelector('[data-gdt-drafts]'),
       draftsList: root.querySelector('[data-gdt-drafts-list]'),
       draftsCount: root.querySelector('[data-gdt-drafts-count]'),
@@ -330,7 +342,26 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       getMeta: () => displayMeta(),
       getIndex: () => index,
       getIndexState: () => indexState,
-      onNavigate: ({ path, heading }) => {
+      getOrgResults: (parsed) => {
+        if (!orgSession || !orgSession.index.size) return [];
+        return orgSession.index.search(parsed, { limit: 12 }).map((r) => {
+          const sep = r.path.indexOf(ORG_SEP);
+          const repo = r.path.slice(0, sep);
+          const path = r.path.slice(sep + 1);
+          const doc = (orgSession.repoDocs.get(repo) || []).find((d) => d.path === path);
+          return {
+            href: `/${client.owner}/${repo}${buildHash({ path, heading: r.matchedHeading ? githubSlug(r.matchedHeading) : null })}`,
+            title: (doc && doc.title) || basename(path),
+            subtitle: `${repo} › ${path}`,
+            snippet: r.snippet && r.snippet.text ? r.snippet : null,
+          };
+        });
+      },
+      onNavigate: ({ path, heading, href }) => {
+        if (href) {
+          location.href = href;
+          return;
+        }
         location.hash = buildHash({ path, heading });
       },
     });
@@ -356,6 +387,12 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       root.classList.toggle('gdt-side-open');
     });
     refs.themeToggle.addEventListener('click', cycleTheme);
+    root.querySelector('[data-gdt-org]').addEventListener('click', openOrgModal);
+    root.querySelector('[data-gdt-orgbar-close]').addEventListener('click', () => {
+      orgSession = null;
+      refs.orgBar.hidden = true;
+      renderTree();
+    });
     root.querySelector('[data-gdt-publish-session]').addEventListener('click', openSessionModal);
     root.querySelector('[data-gdt-discard-session]').addEventListener('click', async () => {
       if (!window.confirm(`Discard all ${Object.keys(drafts).length} drafted change(s)?`)) return;
@@ -556,6 +593,13 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   }
 
   function renderTree() {
+    if (orgSession) {
+      renderOrgTree();
+      renderPinned();
+      renderDrafts();
+      markSelection();
+      return;
+    }
     const treeEl = refs.tree;
     treeEl.textContent = '';
     const list = renderNodes(tree, 0);
@@ -572,13 +616,13 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     markSelection();
   }
 
-  function renderNodes(node, depth) {
+  function renderNodes(node, depth, hrefBase = '') {
     const ul = document.createElement('ul');
     ul.className = 'gdt-tree-list';
     for (const child of node.children) {
       const li = document.createElement('li');
       if (child.isDir) {
-        const sub = renderNodes(child, depth + 1);
+        const sub = renderNodes(child, depth + 1, hrefBase);
         if (treeFilter && !sub.querySelector('a')) continue; // no matching descendants
         const open = treeFilter ? true : expansion.has(child.path) || depth < 1;
         if (open && !treeFilter) expansion.add(child.path);
@@ -600,9 +644,9 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       } else {
         if (!matchesFilter(child)) continue;
         const a = document.createElement('a');
-        a.className = 'gdt-file' + (drafts[child.path] ? ' gdt-has-draft' : '');
-        a.href = buildHash({ path: child.path });
-        a.setAttribute('data-gdt-tree-path', child.path);
+        a.className = 'gdt-file' + (!hrefBase && drafts[child.path] ? ' gdt-has-draft' : '');
+        a.href = hrefBase + buildHash({ path: child.path });
+        if (!hrefBase) a.setAttribute('data-gdt-tree-path', child.path);
         a.innerHTML = `<span class="gdt-file-ico">${ICONS.file}</span>`;
         a.appendChild(Object.assign(document.createElement('span'), { textContent: docLabel(child), className: 'gdt-label' }));
         li.appendChild(a);
@@ -610,6 +654,53 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       ul.appendChild(li);
     }
     return ul;
+  }
+
+  function renderOrgTree() {
+    const treeEl = refs.tree;
+    treeEl.textContent = '';
+    refs.orgBar.hidden = false;
+    refs.orgBarLabel.textContent = `${client.owner}: ${orgSession.repoDocs.size} repos · ${orgSession.totalDocs} docs`;
+    const repos = [...orgSession.repoDocs.keys()].sort((a, b) =>
+      a === client.repo ? -1 : b === client.repo ? 1 : a.localeCompare(b)
+    );
+    for (const repo of repos) {
+      const docsOfRepo = orgSession.repoDocs.get(repo) || [];
+      const group = document.createElement('div');
+      group.className = 'gdt-org-group';
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'gdt-dir gdt-org-repo' + (orgExpanded.has(repo) ? ' gdt-open' : '');
+      head.innerHTML = `<span class="gdt-chevron">${ICONS.chevron}</span><span class="gdt-folder-ico">${ICONS.org}</span>`;
+      head.appendChild(
+        Object.assign(document.createElement('span'), { textContent: repo, className: 'gdt-label' })
+      );
+      head.appendChild(
+        Object.assign(document.createElement('span'), { textContent: String(docsOfRepo.length), className: 'gdt-org-count' })
+      );
+      const isCurrent = repo === client.repo;
+      const body = isCurrent
+        ? renderNodes(tree, 0)
+        : renderNodes(sortTree(buildTree(docsOfRepo), new Map()), 0, `/${client.owner}/${repo}`);
+      body.hidden = !orgExpanded.has(repo);
+      head.addEventListener('click', () => {
+        if (orgExpanded.has(repo)) orgExpanded.delete(repo);
+        else orgExpanded.add(repo);
+        const open = orgExpanded.has(repo);
+        head.classList.toggle('gdt-open', open);
+        body.hidden = !open;
+      });
+      group.appendChild(head);
+      group.appendChild(body);
+      treeEl.appendChild(group);
+    }
+    const errs = orgSession.errors || [];
+    if (errs.length) {
+      const note = document.createElement('div');
+      note.className = 'gdt-tree-empty';
+      note.textContent = `${errs.length} repo(s) skipped: ${errs.map((e) => e.repo).join(', ')}`;
+      treeEl.appendChild(note);
+    }
   }
 
   function renderPinned() {
@@ -889,6 +980,121 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
       contentCache.set(path, base);
     }
     return base;
+  }
+
+  async function openOrgModal() {
+    const backdrop = h(`
+      <div class="gdt-modal-backdrop">
+        <div class="gdt-modal" role="dialog" aria-label="Organization docs">
+          <h3>Search across ${md.utils.escapeHtml(client.owner)}</h3>
+          <p class="gdt-modal-note" data-o-note>Loading repositories…</p>
+          <div class="gdt-org-toolbar" data-o-toolbar hidden>
+            <button type="button" class="gdt-btn gdt-btn-sm" data-o-all>All</button>
+            <button type="button" class="gdt-btn gdt-btn-sm" data-o-none>None</button>
+            <span class="gdt-org-selcount" data-o-count></span>
+          </div>
+          <div class="gdt-org-repolist" data-o-list></div>
+          <div class="gdt-modal-actions">
+            <button type="button" class="gdt-btn" data-o-cancel>Cancel</button>
+            <button type="button" class="gdt-btn gdt-btn-primary" data-o-go disabled>Index selected</button>
+          </div>
+          <p class="gdt-modal-progress" data-o-progress hidden aria-live="polite"></p>
+        </div>
+      </div>
+    `);
+    const q = (sel) => backdrop.querySelector(sel);
+    const closeModal = () => backdrop.remove();
+    q('[data-o-cancel]').addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal();
+    });
+    root.appendChild(backdrop);
+
+    let repoList;
+    try {
+      repoList = await client.listOwnerRepos();
+    } catch (err) {
+      q('[data-o-note]').textContent = `Could not list repositories: ${(err && err.message) || err}`;
+      return;
+    }
+    if (!repoList.length) {
+      q('[data-o-note]').textContent = 'No repositories found.';
+      return;
+    }
+    const previous = await loadOrgSelection(client.owner);
+    const preselected = new Set(previous ? previous.repos : repoList.filter((r) => !r.archived).map((r) => r.name));
+
+    q('[data-o-note]').textContent = client.hasToken
+      ? `Select the repositories to include. Listings are cached per repo; content is indexed for this page session (${repoList.length} repos found).`
+      : `Warning: no token configured — anonymous API access (60 requests/hour) will not get far. Add a token in the extension options first.`;
+    q('[data-o-toolbar]').hidden = false;
+
+    const listEl = q('[data-o-list]');
+    const boxes = [];
+    for (const r of repoList) {
+      const label = document.createElement('label');
+      label.className = 'gdt-org-repo-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = preselected.has(r.name);
+      cb.value = r.name;
+      boxes.push(cb);
+      const name = Object.assign(document.createElement('span'), {
+        textContent: r.name + (r.archived ? ' (archived)' : ''),
+        className: 'gdt-org-repo-name' + (r.archived ? ' gdt-org-archived' : ''),
+      });
+      const desc = Object.assign(document.createElement('span'), {
+        textContent: r.description.slice(0, 80),
+        className: 'gdt-org-repo-desc',
+      });
+      label.appendChild(cb);
+      label.appendChild(name);
+      label.appendChild(desc);
+      listEl.appendChild(label);
+      cb.addEventListener('change', updateCount);
+    }
+    const goBtn = q('[data-o-go]');
+    function updateCount() {
+      const n = boxes.filter((b) => b.checked).length;
+      q('[data-o-count]').textContent = `${n} of ${repoList.length} selected`;
+      goBtn.disabled = n === 0;
+      goBtn.textContent = `Index ${n} repositor${n === 1 ? 'y' : 'ies'}`;
+    }
+    q('[data-o-all]').addEventListener('click', () => {
+      boxes.forEach((b) => (b.checked = true));
+      updateCount();
+    });
+    q('[data-o-none]').addEventListener('click', () => {
+      boxes.forEach((b) => (b.checked = false));
+      updateCount();
+    });
+    updateCount();
+
+    goBtn.addEventListener('click', async () => {
+      const chosen = boxes.filter((b) => b.checked).map((b) => b.value);
+      const progress = q('[data-o-progress]');
+      progress.hidden = false;
+      goBtn.disabled = true;
+      q('[data-o-cancel]').disabled = true;
+      await saveOrgSelection(client.owner, chosen);
+      try {
+        const result = await buildOrgIndex({
+          owner: client.owner,
+          repoNames: chosen,
+          settings,
+          onProgress: (t) => (progress.textContent = t),
+        });
+        let totalDocs = 0;
+        for (const docsOfRepo of result.repoDocs.values()) totalDocs += docsOfRepo.length;
+        orgSession = { org: client.owner, ...result, totalDocs };
+        renderTree();
+        closeModal();
+      } catch (err) {
+        progress.textContent = `Failed: ${(err && err.message) || err}`;
+        goBtn.disabled = false;
+        q('[data-o-cancel]').disabled = false;
+      }
+    });
   }
 
   function openSessionModal() {

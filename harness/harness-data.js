@@ -104,6 +104,11 @@ Makes a widget.
 `,
   };
 
+  const GADGET_FILES = {
+    'README.md': '# Gadget\n\nCompanion tool to the widget.\n',
+    'docs/usage.md': '---\ntitle: Gadget Usage\ntags: [guide]\n---\n\n# Usage\n\nUse the gadget zorblax carefully.\n',
+  };
+
   const enc = new TextEncoder();
   const entries = [];
   const dirs = new Set();
@@ -159,6 +164,11 @@ Makes a widget.
 
     let m = /^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/git\/trees\/HEAD\?recursive=1$/.exec(url);
     if (m) {
+      if (m[2] === 'gadget') {
+        const t = Object.keys(GADGET_FILES).map((path) => ({ path, type: 'blob', sha: 'g-' + path, size: 200 }));
+        t.push({ path: 'docs', type: 'tree', sha: 'g-docs' });
+        return json({ sha: 'gadget-tree', truncated: false, tree: t }, 200, { etag: 'W/"gfixture"' });
+      }
       return json({ sha: 'root-tree-sha', truncated: false, tree: entries }, 200, { etag: 'W/"fixture"' });
     }
     m = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/HEAD\/(.+)$/.exec(url);
@@ -170,13 +180,21 @@ Makes a widget.
     }
 
     // ---- token-mode + propose-PR endpoints ----------------------------------
-    m = /^https:\/\/api\.github\.com\/repos\/acme\/widget\/contents\/([^?]+)\?ref=([^&]+)$/.exec(url);
+    m = /^https:\/\/api\.github\.com\/repos\/acme\/(widget|gadget)\/contents\/([^?]+)\?ref=([^&]+)$/.exec(url);
     if (m && method === 'GET') {
-      const path = m[1].split('/').map(decodeURIComponent).join('/');
+      const files = m[1] === 'gadget' ? GADGET_FILES : FILES;
+      const path = m[2].split('/').map(decodeURIComponent).join('/');
       if (accept.includes('raw')) {
-        return path in FILES ? new Response(FILES[path], { status: 200 }) : new Response('nope', { status: 404 });
+        return path in files ? new Response(files[path], { status: 200 }) : new Response('nope', { status: 404 });
       }
-      return path in FILES ? json({ sha: 'blob-' + path, path }) : json({ message: 'Not Found' }, 404);
+      return path in files ? json({ sha: 'blob-' + path, path }) : json({ message: 'Not Found' }, 404);
+    }
+    if (/^https:\/\/api\.github\.com\/orgs\/acme\/repos\?/.test(url) && method === 'GET') {
+      return json([
+        { name: 'widget', description: 'The main widget', archived: false, private: false },
+        { name: 'gadget', description: 'Companion tool', archived: false, private: false },
+        { name: 'attic', description: 'Old stuff', archived: true, private: false },
+      ]);
     }
     if (url === 'https://api.github.com/repos/acme/widget' && method === 'GET') {
       return json({ name: 'widget', default_branch: 'main', permissions: { push: true } });

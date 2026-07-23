@@ -5,7 +5,7 @@ import { parseQuery, searchFiles } from '../common/search.js';
 import { githubSlug } from '../common/slugger.js';
 import { basename } from '../common/paths.js';
 
-export function createSearchUI({ input, panel, getDocs, getMeta, getIndex, getIndexState, onNavigate }) {
+export function createSearchUI({ input, panel, getDocs, getMeta, getIndex, getIndexState, getOrgResults, onNavigate }) {
   let items = [];
   let active = -1;
   let timer = 0;
@@ -95,7 +95,7 @@ export function createSearchUI({ input, panel, getDocs, getMeta, getIndex, getIn
     panel.appendChild(el('div', 'gdt-sr-group', title));
   }
 
-  function addItem({ path, heading, title, subtitle, snippet }) {
+  function addItem({ path, heading, href, title, subtitle, snippet }) {
     const row = el('button', 'gdt-sr-item');
     row.type = 'button';
     row.appendChild(el('span', 'gdt-sr-title', title));
@@ -105,7 +105,7 @@ export function createSearchUI({ input, panel, getDocs, getMeta, getIndex, getIn
       sn.appendChild(highlighted(snippet.text, snippet.ranges));
       row.appendChild(sn);
     }
-    const item = { path, heading: heading ?? null, el: row };
+    const item = { path, heading: heading ?? null, href: href ?? null, el: row };
     row.addEventListener('click', () => pick(item));
     row.addEventListener('mousemove', () => setActive(items.indexOf(item)));
     panel.appendChild(row);
@@ -144,6 +144,11 @@ export function createSearchUI({ input, panel, getDocs, getMeta, getIndex, getIn
           snippet: r.snippet && r.snippet.text ? r.snippet : null,
         });
       }
+    }
+    const orgResults = getOrgResults ? getOrgResults(parsed) : [];
+    if (orgResults.length) {
+      addGroup('Organization');
+      for (const r of orgResults) addItem(r);
     }
 
     const state = getIndexState();

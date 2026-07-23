@@ -384,6 +384,33 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     return createBatchPr({ files: [{ path, content }], ...rest });
   }
 
+  // Repos of the owning org (falls back to user accounts). Capped at 500.
+  async function listOwnerRepos() {
+    let lastErr = null;
+    for (const base of [`/orgs/${owner}/repos`, `/users/${owner}/repos`]) {
+      const repos = [];
+      try {
+        for (let page = 1; page <= 5; page++) {
+          const batch = await apiJson('GET', `${base}?per_page=100&page=${page}&sort=pushed`);
+          repos.push(
+            ...batch.map((r) => ({
+              name: r.name,
+              description: r.description || '',
+              archived: !!r.archived,
+              private: !!r.private,
+            }))
+          );
+          if (batch.length < 100) break;
+        }
+        return repos;
+      } catch (err) {
+        lastErr = err;
+        if (err.status !== 404) throw err; // 404 on /orgs -> try /users
+      }
+    }
+    throw lastErr;
+  }
+
   const rawUrl = (path) => `${RAW}/${owner}/${repo}/HEAD/${encodePath(path)}`;
   const blobUrl = (path) => `https://github.com/${owner}/${repo}/blob/HEAD/${encodePath(path)}`;
   const editUrl = (path) => `https://github.com/${owner}/${repo}/edit/HEAD/${encodePath(path)}`;
@@ -398,6 +425,7 @@ export function makeClient({ owner, repo, token = '', candidateFolders = [] }) {
     getRepoInfo,
     createEditPr,
     createBatchPr,
+    listOwnerRepos,
     rawUrl,
     blobUrl,
     editUrl,

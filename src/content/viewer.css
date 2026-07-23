@@ -1579,3 +1579,105 @@
 #gdt-root .gdt-session-files li {
   padding: 2px 0;
 }
+
+/* ---- organization mode ---------------------------------------------------- */
+
+#gdt-root .gdt-orgbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--gdt-accent);
+  background: var(--gdt-accent-bg);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gdt-accent);
+}
+
+#gdt-root .gdt-orgbar span {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#gdt-root .gdt-org-group {
+  margin-bottom: 2px;
+}
+
+#gdt-root .gdt-org-repo .gdt-folder-ico {
+  color: var(--gdt-done);
+}
+
+#gdt-root .gdt-org-count {
+  flex: none;
+  font-size: 11px;
+  color: var(--gdt-fg-muted);
+  background: var(--gdt-bg-muted);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+#gdt-root .gdt-org-group > ul {
+  padding-left: 14px;
+}
+
+#gdt-root .gdt-org-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#gdt-root .gdt-org-selcount {
+  font-size: 12px;
+  color: var(--gdt-fg-muted);
+}
+
+#gdt-root .gdt-org-repolist {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--gdt-border-muted);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+#gdt-root .gdt-org-repo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--gdt-border-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--gdt-fg);
+}
+
+#gdt-root .gdt-org-repo-row:last-child {
+  border-bottom: 0;
+}
+
+#gdt-root .gdt-org-repo-row:hover {
+  background: var(--gdt-bg-muted);
+}
+
+#gdt-root .gdt-org-repo-name {
+  font-weight: 600;
+  flex: none;
+}
+
+#gdt-root .gdt-org-archived {
+  color: var(--gdt-fg-muted);
+  font-weight: 400;
+}
+
+#gdt-root .gdt-org-repo-desc {
+  color: var(--gdt-fg-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
