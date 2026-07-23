@@ -19,16 +19,27 @@ A browser extension for **Chrome and Firefox** that adds a **Docs** tab to every
 
 ## Installation
 
-Build first (see Development), or use a release zip from `artifacts/`.
+### Guided install (recommended)
 
-### Chrome (and Chromium/Edge/Brave)
+```bash
+npm install && npm run install-ext
+```
+
+The installer builds the extension if needed, detects your browsers (Chrome, Brave, Edge, Chromium, Firefox on macOS/Linux/Windows), and offers two modes:
+
+- **Guided install** — opens the browser's extensions page with the exact path already in your clipboard; you finish with 2–3 clicks (browsers intentionally provide no deep link that installs an unpacked extension, so those clicks are irreducible). Persists across restarts in Chromium-family browsers.
+- **Quick trial** — zero clicks: launches a throwaway browser session with the extension already loaded (`--load-extension` for Chromium-family, Mozilla's `web-ext run` for Firefox). Note: branded Google Chrome ≥137 ignores `--load-extension`; trials work best in Brave/Edge/Chromium, and the guided install works everywhere.
+
+Non-interactive: `npm run install-ext -- --browser firefox --trial`, `--list`, `--dry-run`.
+
+### Manual: Chrome (and Chromium/Edge/Brave)
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top right)
 3. Click **Load unpacked** and select the `dist/` folder
    (or drag `artifacts/github-docs-tab-chrome-v*.zip` onto the page)
 
-### Firefox
+### Manual: Firefox
 
 Temporary install (for testing):
 

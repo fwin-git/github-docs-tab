@@ -50,12 +50,14 @@ function parseRepo(pathname) {
   return { owner, repo };
 }
 
-let current = null; // { key, owner, repo, settings, client, docs, truncated, total, viewer }
-let scanSeq = 0;
+let current = null; // { key, owner, repo, loading, settings, client, docs, truncated, total, viewer }
 let scanTimer = 0;
 
+// scan() is called repeatedly (boot, Turbo loads, mutation storms during
+// GitHub's hydration). It must be idempotent and race-free: overlapping calls
+// for the same repo are collapsed via current.loading, and a repo switch
+// invalidates in-flight loads by object identity (current !== me).
 async function scan() {
-  const seq = ++scanSeq;
   const repoInfo = parseRepo(location.pathname);
   const nav = findRepoNav();
 
@@ -69,49 +71,58 @@ async function scan() {
 
   const key = `${repoInfo.owner}/${repoInfo.repo}`;
   if (current && current.key === key) {
-    if (current.docs && current.docs.length) {
-      ensureTab({
-        owner: current.owner,
-        repo: current.repo,
-        count: current.total,
-        showBadge: current.settings.showBadge,
-      });
+    if (current.docs) {
+      if (current.docs.length) {
+        ensureTab({
+          owner: current.owner,
+          repo: current.repo,
+          count: current.total,
+          showBadge: current.settings.showBadge,
+        });
+      }
+      applyRoute();
+      return;
     }
-    applyRoute();
-    return;
+    if (current.loading) return;
+    // previous attempt died without finishing — fall through and retry
+  } else {
+    current?.viewer?.close();
+    current = { key, ...repoInfo };
   }
 
-  current?.viewer?.close();
-  current = { key, ...repoInfo };
-
-  const settings = await loadSettings();
-  if (seq !== scanSeq || !current || current.key !== key) return;
-  current.settings = settings;
-  current.client = makeClient({
-    owner: repoInfo.owner,
-    repo: repoInfo.repo,
-    token: settings.token,
-    candidateFolders: settings.docsFolders,
-  });
-
+  const me = current;
+  me.loading = true;
   try {
-    const treeRes = await current.client.getTree();
-    if (seq !== scanSeq || !current || current.key !== key) return;
+    const settings = await loadSettings();
+    if (current !== me) return;
+    me.settings = settings;
+    me.client = makeClient({
+      owner: me.owner,
+      repo: me.repo,
+      token: settings.token,
+      candidateFolders: settings.docsFolders,
+    });
+    const treeRes = await me.client.getTree();
+    if (current !== me) return;
     const { docs, truncated, total } = collectDocs(treeRes.entries, {
       folders: settings.docsFolders,
       includeRootFiles: settings.includeRootFiles,
       maxFiles: settings.maxFiles,
     });
-    current.docs = docs;
-    current.truncated = truncated || treeRes.truncated;
-    current.total = total;
+    me.docs = docs;
+    me.truncated = truncated || treeRes.truncated;
+    me.total = total;
     if (docs.length) {
-      ensureTab({ owner: repoInfo.owner, repo: repoInfo.repo, count: total, showBadge: settings.showBadge });
+      ensureTab({ owner: me.owner, repo: me.repo, count: total, showBadge: settings.showBadge });
       applyRoute();
     }
   } catch (err) {
-    // No tab on rate-limited/private/empty repos we cannot read.
+    // No tab on rate-limited/private/empty repos we cannot read. The DOM
+    // attribute makes failures diagnosable from the page (issue reports).
     console.debug('[github-docs-tab]', err && err.message);
+    document.documentElement.setAttribute('data-gdt-error', `${err && err.name}: ${err && err.message}`.slice(0, 300));
+  } finally {
+    me.loading = false;
   }
 }
 
@@ -180,9 +191,12 @@ document.addEventListener('soft-nav:success', scheduleScan);
 document.addEventListener('pjax:end', scheduleScan);
 
 const observer = new MutationObserver(() => {
-  // Nav got re-rendered by Turbo and our tab vanished — put it back.
-  if (current && current.docs && current.docs.length && findRepoNav() && !tabConnected()) scheduleScan();
-  else if (!current && findRepoNav()) scheduleScan();
+  // Covers: nav re-rendered by Turbo (tab vanished), nav appearing after our
+  // boot scan, and recovery from a died load. Repos confirmed to have zero
+  // docs are excluded so we don't rescan forever.
+  if (!findRepoNav() || tabConnected()) return;
+  if (current && current.docs && !current.docs.length) return;
+  scheduleScan();
 });
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
@@ -194,4 +208,7 @@ onSettingsChanged(() => {
   scheduleScan();
 });
 
-scan();
+document.documentElement.setAttribute('data-gdt-boot', '1');
+scan().catch((err) => {
+  document.documentElement.setAttribute('data-gdt-error', `boot ${err && err.name}: ${err && err.message}`.slice(0, 300));
+});
