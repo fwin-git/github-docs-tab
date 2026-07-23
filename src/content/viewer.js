@@ -25,6 +25,7 @@ import { renderDoc } from './render-doc.js';
 import { createSearchUI } from './search-ui.js';
 import { loadDrafts, saveDraft, removeDraft, clearDrafts } from './drafts.js';
 import { loadOrgSelection, saveOrgSelection, buildOrgIndex, saveOrgSnapshot, loadOrgSnapshot, clearOrgSnapshot, indexOrgContent, ORG_SEP } from './org.js';
+import { getCachedShaSet, repoContentCached } from './blob-cache.js';
 import { RateLimitError } from './github-api.js';
 
 const ICONS = {
@@ -1975,6 +1976,16 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
     };
     renderTree();
     foldCurrentRepoIntoOrg(); // free: current repo's content is already fetched
+
+    // Repos whose every document is already in the persistent blob cache can
+    // be indexed with zero network — do so automatically so they show up
+    // indexed (green, searchable) instead of prompting the user to re-index.
+    const limitBytes = (settings.contentSearchLimitKB || 200) * 1024;
+    const cachedShas = await getCachedShaSet();
+    const readyFromCache = [...snap.keys()].filter(
+      (repo) => repo !== client.repo && repoContentCached(snap.get(repo) || [], cachedShas, limitBytes)
+    );
+    if (readyFromCache.length && orgSession) runOrgIndex(readyFromCache);
   }
 
   // Fold the current repo's already-indexed content into the org index at no

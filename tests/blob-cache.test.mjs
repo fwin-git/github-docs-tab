@@ -1,6 +1,37 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planBlobEviction } from '../src/content/blob-cache.js';
+import { planBlobEviction, repoContentCached } from '../src/content/blob-cache.js';
+
+test('repoContentCached: true when every indexable doc SHA is cached', () => {
+  const docs = [
+    { path: 'a.md', sha: 's1', size: 100 },
+    { path: 'b.md', sha: 's2', size: 100 },
+  ];
+  const cached = new Set(['s1', 's2']);
+  assert.equal(repoContentCached(docs, cached, 200_000), true);
+});
+
+test('repoContentCached: false when any doc SHA is missing', () => {
+  const docs = [
+    { path: 'a.md', sha: 's1', size: 100 },
+    { path: 'b.md', sha: 's2', size: 100 },
+  ];
+  assert.equal(repoContentCached(docs, new Set(['s1']), 200_000), false);
+});
+
+test('repoContentCached: ignores docs over the size limit (they are never indexed)', () => {
+  const docs = [
+    { path: 'a.md', sha: 's1', size: 100 },
+    { path: 'big.md', sha: 's2', size: 999_999 },
+  ];
+  assert.equal(repoContentCached(docs, new Set(['s1']), 200_000), true);
+});
+
+test('repoContentCached: a repo with no indexable docs counts as cached', () => {
+  assert.equal(repoContentCached([], new Set(), 200_000), true);
+  assert.equal(repoContentCached([{ path: 'big.md', sha: 's', size: 999_999 }], new Set(), 200_000), true);
+});
+
 
 test('keeps everything when under budget', () => {
   const manifest = [

@@ -28,6 +28,23 @@ export function planBlobEviction(manifest, budgetBytes) {
   return { keep, evict };
 }
 
+// Pure: is every doc a repo would index already present in the cached SHA set?
+// Docs above the size limit are never indexed, so they don't need to be cached.
+export function repoContentCached(docs, cachedShaSet, limitBytes) {
+  return docs.every((d) => (d.size && d.size > limitBytes) || (d.sha && cachedShaSet.has(d.sha)));
+}
+
+// The set of blob SHAs currently in the persistent cache (one storage read).
+export async function getCachedShaSet() {
+  if (!ext) return new Set();
+  try {
+    const idx = (await ext.storage.local.get(IDX_KEY))[IDX_KEY] || [];
+    return new Set(idx.map((e) => e.sha));
+  } catch {
+    return new Set();
+  }
+}
+
 export async function readBlob(sha) {
   if (!sha || !ext) return null;
   try {
