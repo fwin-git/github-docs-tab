@@ -598,6 +598,15 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   // ---- sidebar --------------------------------------------------------------
 
   function updateSidebarMeta() {
+    // In org mode the header counts every document across all repos in the
+    // session; otherwise it counts the current repo.
+    if (orgSession) {
+      const n = orgSession.totalDocs;
+      const repos = orgSession.repoDocs.size;
+      refs.countLabel.textContent = `${n.toLocaleString()} document${n === 1 ? '' : 's'} · ${repos} repo${repos === 1 ? '' : 's'}`;
+      refs.truncatedBox.hidden = true;
+      return;
+    }
     refs.countLabel.textContent = `${total} document${total === 1 ? '' : 's'}`;
     if (truncated) {
       refs.truncatedBox.hidden = false;
@@ -616,6 +625,7 @@ export function createViewer({ client, settings, docs, truncated, total, onReque
   }
 
   function renderTree() {
+    updateSidebarMeta();
     if (orgSession) {
       renderOrgTree();
       renderPinned();
