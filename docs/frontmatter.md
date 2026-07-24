@@ -2,7 +2,7 @@
 title: Frontmatter Reference
 description: Every YAML frontmatter property the viewer understands.
 tags: [reference, frontmatter]
-order: 3
+order: 6
 ---
 
 # Frontmatter Reference
